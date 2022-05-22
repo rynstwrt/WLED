@@ -1,3 +1,9 @@
+# Click [here](https://github.com/rynstwrt/WLED/blob/main/wled00/ryan_usermod.h) to see my (rynstwrt's) usermod in this fork.
+
+
+---
+
+
 <p align="center">
   <img src="/images/wled_logo_akemi.png">
   <a href="https://github.com/Aircoookie/WLED/releases"><img src="https://img.shields.io/github/release/Aircoookie/WLED.svg?style=flat-square"></a>
