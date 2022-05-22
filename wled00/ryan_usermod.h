@@ -1,6 +1,14 @@
 #pragma once
 
 #include "wled.h"
+#include <Arduino.h>
+#include <U8x8lib.h>
+
+#define OLED_PIN_SCL 5  // D1
+#define OLED_PIN_SDA 4  // D2
+#define OLED_REFRESH_RATE_MS 125
+
+U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA); // Pins are Reset, SCL, SDA
 
 class RyanUsermod : public Usermod 
 {
@@ -11,6 +19,7 @@ class RyanUsermod : public Usermod
 
         enum State {effect, palette, brightness, speed, intensity};
         State selectedState = effect;
+        const char* friendlyStateNames[5] = { "Effect", "Palette", "Brightness", "Speed", "Intensity" };
 
         unsigned int numEffects = 118;
         unsigned int effectIndexStart = 1;
@@ -37,6 +46,9 @@ class RyanUsermod : public Usermod
 
         unsigned int scrollStep = 5;
 
+        long lastOledUpdate = 0;
+        bool oledTurnedOff = false;
+
     public:
         void setup()
         {
@@ -55,6 +67,40 @@ class RyanUsermod : public Usermod
 
             colorUpdated(CALL_MODE_DIRECT_CHANGE);
             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
+
+            u8x8.begin();
+            u8x8.setPowerSave(0);
+            u8x8.setContrast(125);
+            u8x8.setFont(u8x8_font_chroma48medium8_r);
+            u8x8.drawString(0, 0, "Loading...");
+        }
+
+
+        void updateOled()
+        {
+            lastOledUpdate = millis();
+
+            u8x8.clear();
+            u8x8.setCursor(1, 0);
+            u8x8.println(friendlyStateNames[selectedState]);
+
+            u8x8.setCursor(1, 5);
+
+            int val = 125;
+
+            if (selectedState == effect)
+                val = effectCurrent;
+            else if (selectedState == palette)
+                val = effectPalette;
+            else if (selectedState == brightness)
+                val = bri;
+            else if (selectedState == speed)
+                val = effectSpeed;
+            else if (selectedState == intensity)
+                val = effectIntensity;
+
+            u8x8.print("value: ");
+            u8x8.print(val);
         }
 
 
@@ -99,6 +145,8 @@ class RyanUsermod : public Usermod
                     {
                         prevButtonState = buttonState;
                     }
+
+                    updateOled();
                 }
             
 
@@ -213,6 +261,8 @@ class RyanUsermod : public Usermod
                             colorUpdated(CALL_MODE_DIRECT_CHANGE);
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
+
+                        updateOled();
                     }
                     else if (encoderB == HIGH)
                     {
@@ -320,12 +370,20 @@ class RyanUsermod : public Usermod
                             colorUpdated(CALL_MODE_DIRECT_CHANGE);
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
+
+                        updateOled();
                     }
 
 
                     
                 }
                 
+
+                if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
+                {
+                    u8x8.setPowerSave(1);
+                    oledTurnedOff = true;
+                }
 
                 encoderAPrev = encoderA;
                 loopTime = currentTime;
