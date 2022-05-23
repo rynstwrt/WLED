@@ -11,10 +11,6 @@
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA); // Pins are Reset, SCL, SDA
 
 
-// TODO: user-friendly effect and palette colors
-// TODO: prevent first turn and turn after sleep from changing value
-
-
 class RyanUsermod : public Usermod 
 {
     private:
@@ -30,11 +26,13 @@ class RyanUsermod : public Usermod
         unsigned int effectIndexStart = 1;
         unsigned int effectIndex = effectIndexStart;
         int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
+        char* effectFriendlyName;
 
         unsigned int numPalettes = 71;
         unsigned int paletteIndexStart = 6;
         unsigned int paletteIndex = paletteIndexStart;
         int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
+        char* paletteFriendlyName;
         
         unsigned char buttonState = HIGH;
         unsigned char prevButtonState = HIGH;
@@ -86,6 +84,42 @@ class RyanUsermod : public Usermod
         }
 
 
+        void setCurrentEffectName()
+        {
+            char lineBuffer[21];
+
+            uint8_t printedChars = extractModeName(effectCurrent, JSON_mode_names, lineBuffer, 19);
+
+            if (lineBuffer[0]=='*' && lineBuffer[1]==' ')
+            {
+                for (byte i=2; i<=printedChars; i++)
+                    lineBuffer[i-2] = lineBuffer[i]; //include '\0'
+
+                printedChars -= 2;
+            }
+
+            effectFriendlyName = lineBuffer;      
+        }
+
+
+        void setCurrentPaletteName()
+        {
+            char lineBuffer[21];
+
+            uint8_t printedChars = extractModeName(effectPalette, JSON_palette_names, lineBuffer, 19);
+
+            if (lineBuffer[0]=='*' && lineBuffer[1]==' ')
+            {
+                for (byte i=2; i<=printedChars; i++)
+                    lineBuffer[i-2] = lineBuffer[i]; //include '\0'
+
+                printedChars -= 2;
+            }
+
+            paletteFriendlyName = lineBuffer;      
+        }
+
+
         void updateOled()
         {
             lastOledUpdate = millis();
@@ -93,51 +127,64 @@ class RyanUsermod : public Usermod
             u8x8.clear();
             u8x8.setCursor(1, 0);
             u8x8.println(friendlyStateNames[selectedState]);
-            
-
-            double val = 125;
-            const char* secondLine = "";
 
             if (selectedState == effect)
             {
-                val = effectCurrent;
-                secondLine = "NUMBER:";
+                u8x8.setCursor(1, 1);
+                u8x8.println("MODE:");
+
+                u8x8.setCursor(1, 3);
+                setCurrentEffectName();
+                u8x8.print(effectFriendlyName);
             }
             else if (selectedState == palette)
             {
-                val = effectPalette;
-                secondLine = "NUMBER:";
+                u8x8.setCursor(1, 1);
+                u8x8.println("NAME:");
+
+                u8x8.setCursor(1, 3);
+                setCurrentPaletteName();
+                u8x8.print(paletteFriendlyName);
             }
             else if (selectedState == brightness)
             {
-                val = bri;
+                u8x8.setCursor(1, 1);
+                u8x8.println("PERCENT:");
+
+                double val = bri;
                 val /= 255;
                 val *= 100;
                 val = floor(val);
-                secondLine = "PERCENT:";
+
+                u8x8.setCursor(1, 3);
+                u8x8.print((int) val);
             }
             else if (selectedState == speed)
             {
-                val = effectSpeed;
+                u8x8.setCursor(1, 1);
+                u8x8.println("PERCENT:");
+
+                double val = effectSpeed;
                 val /= 255;
                 val *= 100;
                 val = floor(val);
-                secondLine = "PERCENT:";
+
+                u8x8.setCursor(1, 3);
+                u8x8.print((int) val);
             }
             else if (selectedState == intensity)
             {
-                val = effectIntensity;
+                u8x8.setCursor(1, 1);
+                u8x8.println("OPTION PERCENT:");
+
+                double val = effectIntensity;
                 val /= 255;
                 val *= 100;
                 val = floor(val);
-                secondLine = "OPTION PERCENT:";
+
+                u8x8.setCursor(1, 3);
+                u8x8.print((int) val);
             }
-
-            u8x8.setCursor(1, 1);
-            u8x8.println(secondLine);
-
-            u8x8.setCursor(1, 3);
-            u8x8.print((int) val);
         }
 
 
