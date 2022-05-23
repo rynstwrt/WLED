@@ -10,6 +10,11 @@
 
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA); // Pins are Reset, SCL, SDA
 
+
+// TODO: user-friendly effect and palette colors
+// TODO: prevent first turn and turn after sleep from changing value
+
+
 class RyanUsermod : public Usermod 
 {
     private:
@@ -19,7 +24,7 @@ class RyanUsermod : public Usermod
 
         enum State {effect, palette, brightness, speed, intensity};
         State selectedState = effect;
-        const char* friendlyStateNames[5] = { "Effect", "Palette", "Brightness", "Speed", "Intensity" };
+        const char* friendlyStateNames[5] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "FX SPECIFIC" };
 
         unsigned int numEffects = 118;
         unsigned int effectIndexStart = 1;
@@ -47,7 +52,7 @@ class RyanUsermod : public Usermod
         unsigned int scrollStep = 5;
 
         long lastOledUpdate = 0;
-        bool oledTurnedOff = false;
+        bool oledTurnedOff = true;
 
     public:
         void setup()
@@ -71,8 +76,13 @@ class RyanUsermod : public Usermod
             u8x8.begin();
             u8x8.setPowerSave(0);
             u8x8.setContrast(125);
+            //u8x8.setFont(u8x8_font_5x8_f);
             u8x8.setFont(u8x8_font_chroma48medium8_r);
-            u8x8.drawString(0, 0, "Loading...");
+            u8x8.drawString(1, 1, "LED MATRIX");
+            u8x8.drawString(1, 3, "PRESS TO");
+            u8x8.drawString(1, 4, "CHANGE FUNCTION");
+            u8x8.drawString(1, 6, "TURN TO");
+            u8x8.drawString(1, 7, "CHANGE VALUE");
         }
 
 
@@ -83,24 +93,51 @@ class RyanUsermod : public Usermod
             u8x8.clear();
             u8x8.setCursor(1, 0);
             u8x8.println(friendlyStateNames[selectedState]);
+            
 
-            u8x8.setCursor(1, 5);
-
-            int val = 125;
+            double val = 125;
+            const char* secondLine = "";
 
             if (selectedState == effect)
+            {
                 val = effectCurrent;
+                secondLine = "NUMBER:";
+            }
             else if (selectedState == palette)
+            {
                 val = effectPalette;
+                secondLine = "NUMBER:";
+            }
             else if (selectedState == brightness)
+            {
                 val = bri;
+                val /= 255;
+                val *= 100;
+                val = floor(val);
+                secondLine = "PERCENT:";
+            }
             else if (selectedState == speed)
+            {
                 val = effectSpeed;
+                val /= 255;
+                val *= 100;
+                val = floor(val);
+                secondLine = "PERCENT:";
+            }
             else if (selectedState == intensity)
+            {
                 val = effectIntensity;
+                val /= 255;
+                val *= 100;
+                val = floor(val);
+                secondLine = "OPTION PERCENT:";
+            }
 
-            u8x8.print("value: ");
-            u8x8.print(val);
+            u8x8.setCursor(1, 1);
+            u8x8.println(secondLine);
+
+            u8x8.setCursor(1, 3);
+            u8x8.print((int) val);
         }
 
 
@@ -115,10 +152,14 @@ class RyanUsermod : public Usermod
 
                 if (prevButtonState != buttonState)
                 {
-
                     if (buttonState == LOW)
                     {
-                        if (selectedState == effect)
+                        if (oledTurnedOff)
+                        {
+                            u8x8.setPowerSave(0);
+                            oledTurnedOff = false;
+                        }
+                        else if (selectedState == effect)
                         {
                             selectedState = palette;
                         }
@@ -159,7 +200,12 @@ class RyanUsermod : public Usermod
                     // Change to encoderB == HIGH and else encoderB == LOW for next d1 minis
                     if (encoderB == LOW) 
                     {
-                        if (selectedState == effect)
+                        if (oledTurnedOff)
+                        {
+                            u8x8.setPowerSave(0);
+                            oledTurnedOff = false;
+                        }
+                        else if (selectedState == effect)
                         {
                             Serial.print("effect change: ");
 
