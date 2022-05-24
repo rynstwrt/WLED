@@ -43,8 +43,8 @@ class RyanUsermod : public Usermod
 
         unsigned char encoderAPrev = 0;
 
-        int clkPin = 14;  // d5
-        int dtPin = 12;    // d6
+        int clkPin = 14;  // d6
+        int dtPin = 12;    // d5
         int swPin = 13;    // d7
 
         unsigned int scrollStep = 5;
@@ -243,9 +243,7 @@ class RyanUsermod : public Usermod
 
                 if ((!encoderA) && encoderAPrev)
                 {
-                    // ****FLIPPED FOR MY FIRST D1 MINI**** 
-                    // Change to encoderB == HIGH and else encoderB == LOW for next d1 minis
-                    if (encoderB == LOW) 
+                    if (encoderB == HIGH) 
                     {
                         if (oledTurnedOff)
                         {
@@ -357,7 +355,7 @@ class RyanUsermod : public Usermod
 
                         updateOled();
                     }
-                    else if (encoderB == HIGH)
+                    else if (encoderB == LOW)
                     {
                         if (selectedState == effect)
                         {
