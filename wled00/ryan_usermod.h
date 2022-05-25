@@ -3,6 +3,7 @@
 #include "wled.h"
 #include <Arduino.h>
 #include <U8x8lib.h>
+#include <string>
 
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
@@ -14,34 +15,25 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 class RyanUsermod : public Usermod 
 {
     private:
-        unsigned long lastTime;
         unsigned long currentTime;
         unsigned long loopTime;
 
-        enum State {effect, palette, brightness, speed, intensity};
-        //State selectedState = effect;
+        static const int numStates = 5;
         int selectedStateIndex = 0;
-        const int numStates = 5;
-        const char* friendlyStateNames[5] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "FX SPECIFIC" };
+        const String friendlyStateNames[numStates] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "FX SPECIFIC" };
 
-        const int numEffects = 118;
-        const int effectIndexStart = 1;
+        static const int numEffects = 118;
+        static const int effectIndexStart = 1;
         int effectIndex = effectIndexStart;
-        int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
-        char* effectFriendlyName;
+        const int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
 
-        const int numPalettes = 71;
-        const int paletteIndexStart = 6;
+        static const int numPalettes = 71;
+        static const int paletteIndexStart = 6;
         int paletteIndex = paletteIndexStart;
-        int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
-        char* paletteFriendlyName;
+        const int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
         
         unsigned char buttonState = HIGH;
         unsigned char prevButtonState = HIGH;
-
-        CRGB fastled_col;
-        CHSV prim_hsv;
-        int16_t newVal;
 
         unsigned char encoderAPrev = 0;
 
@@ -54,6 +46,7 @@ class RyanUsermod : public Usermod
         long lastOledUpdate = 0;
         bool oledTurnedOff = true;
 
+        
     public:
         void setup()
         {
@@ -64,6 +57,8 @@ class RyanUsermod : public Usermod
             currentTime = millis();
             loopTime = currentTime;
 
+            // TODO: test this?
+            CRGB fastled_col;
             col[0] = fastled_col.Black;
             col[1] = fastled_col.Black;
             col[2] = fastled_col.Black;
@@ -73,10 +68,13 @@ class RyanUsermod : public Usermod
             colorUpdated(CALL_MODE_DIRECT_CHANGE);
             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
 
+            // *** A graphics display with 128x64 pixel has 16 colums and 8 rows ***
             u8x8.begin();
             u8x8.setPowerSave(0);
-            u8x8.setContrast(125);
+            u8x8.setContrast(255);
+            //u8x8.setContrast(125);
             u8x8.setFont(u8x8_font_chroma48medium8_r);
+
             u8x8.drawString(0, 1, "PRESS + TURN");
             u8x8.drawString(0, 2, "TO CHANGE");
             u8x8.drawString(0, 3, "THE MODE");
@@ -85,11 +83,15 @@ class RyanUsermod : public Usermod
         }
 
 
-        void setCurrentEffectName()
+        // effect when true, palette when false.
+        String getCurrentEffectOrPaletteName(bool effect) 
         {
             char lineBuffer[21];
 
-            uint8_t printedChars = extractModeName(effectCurrent, JSON_mode_names, lineBuffer, 19);
+            const char* relatedJSON  = effect ? JSON_mode_names : JSON_palette_names;
+            const uint8_t currentEffectOrMode = effect ? effectCurrent : effectPalette;
+
+            uint8_t printedChars = extractModeName(currentEffectOrMode, relatedJSON, lineBuffer, 19);
 
             if (lineBuffer[0]=='*' && lineBuffer[1]==' ')
             {
@@ -99,25 +101,7 @@ class RyanUsermod : public Usermod
                 printedChars -= 2;
             }
 
-            effectFriendlyName = lineBuffer;      
-        }
-
-
-        void setCurrentPaletteName()
-        {
-            char lineBuffer[21];
-
-            uint8_t printedChars = extractModeName(effectPalette, JSON_palette_names, lineBuffer, 19);
-
-            if (lineBuffer[0]=='*' && lineBuffer[1]==' ')
-            {
-                for (byte i=2; i<=printedChars; i++)
-                    lineBuffer[i-2] = lineBuffer[i]; //include '\0'
-
-                printedChars -= 2;
-            }
-
-            paletteFriendlyName = lineBuffer;      
+            return (String) lineBuffer;
         }
 
 
@@ -125,37 +109,27 @@ class RyanUsermod : public Usermod
         {
             lastOledUpdate = millis();
 
-            u8x8.clear();
-            u8x8.setCursor(0, 0);
-            u8x8.print(selectedStateIndex + 1);
-            u8x8.setCursor(1, 0);
-            u8x8.print(".");
-            u8x8.setCursor(2, 0);
+            u8x8.clear(); // sets cursor to 0, 0.
             u8x8.println(friendlyStateNames[selectedStateIndex]);
+            u8x8.setCursor(0, 1);
 
-            State selectedState = static_cast<State>(selectedStateIndex);
-
-            if (selectedState == effect)
+            // effect mode
+            if (selectedStateIndex == 0)
             {
-                u8x8.setCursor(1, 1);
                 u8x8.println("MODE:");
-
                 u8x8.setCursor(1, 3);
-                setCurrentEffectName();
-                u8x8.print(effectFriendlyName);
+                u8x8.print(getCurrentEffectOrPaletteName(true));
             }
-            else if (selectedState == palette)
+            // palette mode
+            else if (selectedStateIndex == 1)
             {
-                u8x8.setCursor(1, 1);
                 u8x8.println("NAME:");
-
                 u8x8.setCursor(1, 3);
-                setCurrentPaletteName();
-                u8x8.print(paletteFriendlyName);
+                u8x8.print(getCurrentEffectOrPaletteName(false));
             }
-            else if (selectedState == brightness)
+            // brightness mode
+            else if (selectedStateIndex == 2)
             {
-                u8x8.setCursor(1, 1);
                 u8x8.println("PERCENT:");
 
                 double val = bri;
@@ -166,9 +140,9 @@ class RyanUsermod : public Usermod
                 u8x8.setCursor(1, 3);
                 u8x8.print((int) val);
             }
-            else if (selectedState == speed)
+            // speed mode
+            else if (selectedStateIndex == 3)
             {
-                u8x8.setCursor(1, 1);
                 u8x8.println("PERCENT:");
 
                 double val = effectSpeed;
@@ -179,9 +153,9 @@ class RyanUsermod : public Usermod
                 u8x8.setCursor(1, 3);
                 u8x8.print((int) val);
             }
-            else if (selectedState == intensity)
+            // intensity mode (fx specific mode)
+            else if (selectedStateIndex == 4)
             {
-                u8x8.setCursor(1, 1);
                 u8x8.println("OPTION PERCENT:");
 
                 double val = effectIntensity;
@@ -199,7 +173,6 @@ class RyanUsermod : public Usermod
         {
             currentTime = millis();
 
-
             if (currentTime >= (loopTime + 2))
             {
                 int encoderA = digitalRead(dtPin);
@@ -208,6 +181,7 @@ class RyanUsermod : public Usermod
 
                 if ((!encoderA) && encoderAPrev)
                 {
+                    // Rotating right while pressed
                     if (encoderB == HIGH && buttonState == LOW)
                     {
                         ++selectedStateIndex;
@@ -215,21 +189,20 @@ class RyanUsermod : public Usermod
                         if (selectedStateIndex >= numStates)
                             selectedStateIndex = 0;
 
-                        Serial.print("rotating right while pressing: ");
-                        Serial.println(selectedStateIndex);
+                        Serial.println("Rotating right while pressing.");
                     }
+                    // Rotating right
                     else if (encoderB == HIGH) 
                     {
-                        Serial.println("rotating right");
-
-                        State selectedState = static_cast<State>(selectedStateIndex);
+                        Serial.println("Rotating right.");
 
                         if (oledTurnedOff)
                         {
                             u8x8.setPowerSave(0);
                             oledTurnedOff = false;
                         }
-                        else if (selectedState == effect)
+                        // effect
+                        else if (selectedStateIndex == 0)
                         {
                             Serial.print("effect change: ");
 
@@ -255,24 +228,8 @@ class RyanUsermod : public Usermod
                             colorUpdated(CALL_MODE_DIRECT_CHANGE);
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
-                        else if (selectedState == brightness)
-                        {
-                            Serial.print("brightness change: ");
-
-                            int currentBrightness = bri;
-                            currentBrightness += scrollStep;
-
-                            if (currentBrightness > 255)
-                                currentBrightness = 255;
-
-                            bri = currentBrightness;
-
-                            Serial.println(bri);
-
-                            stateUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                        }
-                        else if (selectedState == palette)
+                        // palette
+                        else if (selectedStateIndex == 1)
                         {
                             Serial.print("palette change: ");
                             ++paletteIndex;
@@ -297,7 +254,26 @@ class RyanUsermod : public Usermod
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                             
                         }
-                        else if (selectedState == speed)
+                        // brightness
+                        else if (selectedStateIndex == 2)
+                        {
+                            Serial.print("brightness change: ");
+
+                            int currentBrightness = bri;
+                            currentBrightness += scrollStep;
+
+                            if (currentBrightness > 255)
+                                currentBrightness = 255;
+
+                            bri = currentBrightness;
+
+                            Serial.println(bri);
+
+                            stateUpdated(CALL_MODE_DIRECT_CHANGE);
+                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
+                        }
+                        // speed
+                        else if (selectedStateIndex == 3)
                         {
                             Serial.print("speed change: ");
                             
@@ -314,7 +290,8 @@ class RyanUsermod : public Usermod
                             colorUpdated(CALL_MODE_DIRECT_CHANGE);
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
-                        else if (selectedState == intensity)
+                        // intensity
+                        else if (selectedStateIndex == 4)
                         {
                             Serial.print("intensity change: ");
 
@@ -332,6 +309,7 @@ class RyanUsermod : public Usermod
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
                     }
+                    // Rotating left while pressing.
                     else if (encoderB == LOW && buttonState == LOW)
                     {
                         --selectedStateIndex;
@@ -339,14 +317,15 @@ class RyanUsermod : public Usermod
                         if (selectedStateIndex < 0)
                             selectedStateIndex = numStates - 1;
 
-                        Serial.print("rotating left while pressing: ");
-                        Serial.println(selectedStateIndex);
+                        Serial.println("Rotating left while pressing.");
                     }
+                    // Rotating left.
                     else if (encoderB == LOW)
                     {
-                        State selectedState = static_cast<State>(selectedStateIndex);
+                        Serial.println("Rotating left.");
 
-                        if (selectedState == effect)
+                        // effect
+                        if (selectedStateIndex == 0)
                         {
                             Serial.print("effect change: ");
                             
@@ -372,25 +351,8 @@ class RyanUsermod : public Usermod
                             colorUpdated(CALL_MODE_BUTTON);
                             updateInterfaces(CALL_MODE_BUTTON);
                         }
-                        else if (selectedState == brightness)
-                        {
-
-                            Serial.print("brightness change: ");
-
-                            int currentBrightness = bri;
-                            currentBrightness -= scrollStep;
-
-                            if (currentBrightness < 0)
-                                currentBrightness = 0;
-
-                            bri = currentBrightness;
-
-                            Serial.println(bri);
-
-                            stateUpdated(CALL_MODE_BUTTON);
-                            updateInterfaces(CALL_MODE_BUTTON);
-                        }
-                        else if (selectedState == palette)
+                        // palette
+                        else if (selectedStateIndex == 1)
                         {
                             Serial.print("palette change: ");
 
@@ -414,9 +376,28 @@ class RyanUsermod : public Usermod
 
                             colorUpdated(CALL_MODE_BUTTON);
                             updateInterfaces(CALL_MODE_BUTTON);
-
                         }
-                        else if (selectedState == speed)
+                        // brightness
+                        else if (selectedStateIndex == 2)
+                        {
+
+                            Serial.print("brightness change: ");
+
+                            int currentBrightness = bri;
+                            currentBrightness -= scrollStep;
+
+                            if (currentBrightness < 0)
+                                currentBrightness = 0;
+
+                            bri = currentBrightness;
+
+                            Serial.println(bri);
+
+                            stateUpdated(CALL_MODE_BUTTON);
+                            updateInterfaces(CALL_MODE_BUTTON);
+                        }
+                        // speed
+                        else if (selectedStateIndex == 3)
                         {
                             Serial.print("speed change: ");
                             
@@ -433,7 +414,8 @@ class RyanUsermod : public Usermod
                             colorUpdated(CALL_MODE_DIRECT_CHANGE);
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
-                        else if (selectedState == intensity)
+                        // intensity
+                        else if (selectedStateIndex == 4)
                         {
                             Serial.print("intensity change: ");
 
