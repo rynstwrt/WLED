@@ -7,7 +7,6 @@
 
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
-#define OLED_REFRESH_RATE_MS 125
 
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA); // Pins are Reset, SCL, SDA
 
@@ -72,7 +71,6 @@ class RyanUsermod : public Usermod
             u8x8.begin();
             u8x8.setPowerSave(0);
             u8x8.setContrast(255);
-            //u8x8.setContrast(125);
             u8x8.setFont(u8x8_font_chroma48medium8_r);
 
             u8x8.drawString(0, 1, "PRESS + TURN");
@@ -109,62 +107,64 @@ class RyanUsermod : public Usermod
         {
             lastOledUpdate = millis();
 
-            u8x8.clear(); // sets cursor to 0, 0.
+            u8x8.clear(); // sets cursor to (0, 0), too.
             u8x8.println(friendlyStateNames[selectedStateIndex]);
-            u8x8.setCursor(0, 1);
+            u8x8.setCursor(0, 2);
 
             // effect mode
             if (selectedStateIndex == 0)
             {
-                u8x8.println("MODE:");
-                u8x8.setCursor(1, 3);
                 u8x8.print(getCurrentEffectOrPaletteName(true));
             }
             // palette mode
             else if (selectedStateIndex == 1)
             {
-                u8x8.println("NAME:");
-                u8x8.setCursor(1, 3);
                 u8x8.print(getCurrentEffectOrPaletteName(false));
             }
             // brightness mode
             else if (selectedStateIndex == 2)
             {
-                u8x8.println("PERCENT:");
-
                 double val = bri;
                 val /= 255;
                 val *= 100;
                 val = floor(val);
 
-                u8x8.setCursor(1, 3);
-                u8x8.print((int) val);
+                int truncVal = val;
+                u8x8.print(truncVal);
+
+                int numDigits = (truncVal == 0) ? 1 : int(log10(truncVal) + 1);
+                u8x8.setCursor(numDigits, 2);
+                u8x8.println("%");
             }
             // speed mode
             else if (selectedStateIndex == 3)
             {
-                u8x8.println("PERCENT:");
-
                 double val = effectSpeed;
                 val /= 255;
                 val *= 100;
                 val = floor(val);
 
-                u8x8.setCursor(1, 3);
-                u8x8.print((int) val);
+                int truncVal = val;
+                u8x8.print(truncVal);
+
+                int numDigits = (truncVal == 0) ? 1 : int(log10(truncVal) + 1);
+                u8x8.setCursor(numDigits, 2);
+                u8x8.println("%");
             }
             // intensity mode (fx specific mode)
             else if (selectedStateIndex == 4)
             {
-                u8x8.println("OPTION PERCENT:");
-
                 double val = effectIntensity;
                 val /= 255;
                 val *= 100;
                 val = floor(val);
 
-                u8x8.setCursor(1, 3);
-                u8x8.print((int) val);
+                int truncVal = val;
+                u8x8.print(truncVal);
+
+                int numDigits = (truncVal == 0) ? 1 : int(log10(truncVal) + 1);
+                u8x8.setCursor(numDigits, 2);
+                u8x8.println("%");
             }
         }
 
