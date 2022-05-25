@@ -36,7 +36,7 @@ class RyanUsermod : public Usermod
 
         static const int numStates = 5;
         int selectedStateIndex = 0;
-        const String friendlyStateNames[numStates] = { "EFFECT:", "PALETTE:", "BRIGHTNESS:", "SPEED:", "FX SPECIFIC:" };
+        const String friendlyStateNames[numStates] = { "EFFECT:", "PALETTE:", "BRIGHTNESS:", "SPEED:", "INTENSITY:" };
 
         int effectIndex = EFFECT_INDEX_START;
         const int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
@@ -100,13 +100,12 @@ class RyanUsermod : public Usermod
         }
 
 
-        // effect when true, palette when false.
-        String getCurrentEffectOrPaletteName(bool effect) 
+        String getCurrentEffectOrPaletteName(bool type) // effect when true, palette when false.
         {
             char lineBuffer[21];
 
-            const char* relatedJSON  = effect ? JSON_mode_names : JSON_palette_names;
-            const uint8_t currentEffectOrMode = effect ? effectCurrent : effectPalette;
+            const char* relatedJSON  = type ? JSON_mode_names : JSON_palette_names;
+            const uint8_t currentEffectOrMode = type ? effectCurrent : effectPalette;
 
             uint8_t printedChars = extractModeName(currentEffectOrMode, relatedJSON, lineBuffer, 19);
 
@@ -130,18 +129,15 @@ class RyanUsermod : public Usermod
             u8x8.println(friendlyStateNames[selectedStateIndex]);
             u8x8.setCursor(0, 2);
 
-            // effect mode
-            if (selectedStateIndex == 0)
+            if (selectedStateIndex == 0) // effect mode
             {
                 u8x8.print(getCurrentEffectOrPaletteName(true));
             }
-            // palette mode
-            else if (selectedStateIndex == 1)
+            else if (selectedStateIndex == 1) // palette mode
             {
                 u8x8.print(getCurrentEffectOrPaletteName(false));
             }
-            // brightness mode
-            else if (selectedStateIndex == 2)
+            else if (selectedStateIndex == 2) // brightness mode
             {
                 double val = bri;
                 val /= 255;
@@ -155,8 +151,7 @@ class RyanUsermod : public Usermod
                 u8x8.setCursor(numDigits, 2);
                 u8x8.println("%");
             }
-            // speed mode
-            else if (selectedStateIndex == 3)
+            else if (selectedStateIndex == 3) // speed mode
             {
                 double val = effectSpeed;
                 val /= 255;
@@ -170,8 +165,7 @@ class RyanUsermod : public Usermod
                 u8x8.setCursor(numDigits, 2);
                 u8x8.println("%");
             }
-            // intensity mode (fx specific mode)
-            else if (selectedStateIndex == 4)
+            else if (selectedStateIndex == 4) // intensity mode (fx specific mode)
             {
                 double val = effectIntensity;
                 val /= 255;
@@ -188,6 +182,131 @@ class RyanUsermod : public Usermod
         }
 
 
+        /**
+         * @brief Called when the rotary encoder is rotated on a mode 
+         * that doesn't use numbers, such as the effect and palette modes.
+         * 
+         * @param direction True if clockwise, false if counterclockwise.
+         * @param type True if effect, false if palette.
+         */
+        void onEncoderRotatedQualitative(bool direction, bool type)
+        {
+            int relevantIndex = type ? effectIndex : paletteIndex;
+            Serial.println(relevantIndex);
+
+            direction ? ++relevantIndex : --relevantIndex;
+            Serial.println(relevantIndex);
+
+            int numBanned = type ? (sizeof(bannedEffects) / sizeof(*bannedEffects)) : (sizeof(bannedPalettes) / sizeof(*bannedPalettes));
+
+            if (type)
+            {
+                while (std::find(bannedEffects, bannedEffects + numBanned, relevantIndex) != bannedEffects + numBanned)
+                    direction ? ++relevantIndex : --relevantIndex;
+            }
+            else
+            {
+                while (std::find(bannedPalettes, bannedPalettes + numBanned, relevantIndex) != bannedPalettes + numBanned)
+                    direction ? ++relevantIndex : --relevantIndex;
+            }
+
+            Serial.println(relevantIndex);
+
+            int numIndexes = type ? NUM_EFFECTS : NUM_PALETTES;
+            int startIndex = type ? EFFECT_INDEX_START : PALETTE_INDEX_START;
+
+            Serial.print("A ");
+            Serial.println(numIndexes);
+            Serial.print("B ");
+            Serial.println(startIndex);
+
+            if (direction && relevantIndex >= numIndexes)
+            {
+                relevantIndex = startIndex;
+            }
+
+            if (!direction && relevantIndex < 0)
+            {
+                relevantIndex = numIndexes - 1;
+            }
+
+            Serial.println(relevantIndex);
+                
+            if (type)
+            {
+                effectIndex = relevantIndex;
+                effectCurrent = effectIndex;
+                strip.restartRuntime();
+            }
+            else
+            {
+                paletteIndex = relevantIndex;
+                effectPalette = paletteIndex;
+            }
+
+            colorUpdated(CALL_MODE_DIRECT_CHANGE);
+            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
+
+            Serial.println("------------------");
+        }
+
+
+        /**
+         * @brief Called when the rotary encoder is rotated on a mode 
+         * that uses numbers, such as the brightness and intensity modes.
+         * 
+         * @param direction True if clockwise, false if counterclockwise. 
+         * @param type 0 -> brightness    1 -> speed    2 -> intensity
+         */
+        void onEncoderRotatedQuantitative(bool direction, int type)
+        {
+            int currentVal = 0;
+
+            if (type == 0)
+                currentVal = bri;
+            else if (type == 1)
+                currentVal = effectSpeed;
+            else if (type == 2)
+                currentVal = effectIntensity;
+
+            currentVal = (direction) ? currentVal + SCROLL_STEP : currentVal - SCROLL_STEP;
+
+            if (direction && currentVal > 255)
+                currentVal = 255;
+
+            if (!direction && currentVal < 0)
+                currentVal = 0;
+
+            if (type == 0)
+                bri = currentVal;
+            else if (type == 1)
+                effectSpeed = currentVal;
+            else if (type == 2)
+                effectIntensity = currentVal;
+
+            if (type == 0)
+                stateUpdated(CALL_MODE_DIRECT_CHANGE);
+            else
+                colorUpdated(CALL_MODE_DIRECT_CHANGE);
+
+            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
+        }
+
+
+        /**
+         * @param direction true if clockwise, false if counterclockwise. 
+         */
+        void onEncoderRotatedWhilePressed(bool direction) // clockwise when true, counterclockwise when false.
+        {
+            direction ? ++selectedStateIndex : --selectedStateIndex;
+
+            if (selectedStateIndex >= numStates)
+                selectedStateIndex = 0;
+            else if (selectedStateIndex < 0)
+                selectedStateIndex = NUM_STATES - 1;
+        }
+
+
         void loop()
         {
             currentTime = millis();
@@ -200,265 +319,51 @@ class RyanUsermod : public Usermod
 
                 if ((!encoderA) && encoderAPrev)
                 {
-                    // Rotating right while pressed
-                    if (encoderB == HIGH && buttonState == LOW)
+                    if (oledTurnedOff)
                     {
-                        ++selectedStateIndex;
-
-                        if (selectedStateIndex >= numStates)
-                            selectedStateIndex = 0;
-
-                        Serial.println("Rotating right while pressing.");
+                        u8x8.setPowerSave(0);
+                        oledTurnedOff = false;
+                        return;
                     }
-                    // Rotating right
-                    else if (encoderB == HIGH) 
+
+                    if (encoderB == HIGH && buttonState == LOW) // Rotating clockwise while pressed
                     {
-                        Serial.println("Rotating right.");
-
-                        if (oledTurnedOff)
-                        {
-                            u8x8.setPowerSave(0);
-                            oledTurnedOff = false;
-                        }
-                        // effect
-                        else if (selectedStateIndex == 0)
-                        {
-                            Serial.print("effect change: ");
-
-                            ++effectIndex;
-
-                            int numBannedEffects = sizeof(bannedEffects) / sizeof(*bannedEffects);
-
-                            while (std::find(bannedEffects, bannedEffects + numBannedEffects, effectIndex) != bannedEffects + numBannedEffects)
-                            {
-                                ++effectIndex;
-                            }
-
-                            if (effectIndex >= NUM_EFFECTS)
-                            {
-                                effectIndex = EFFECT_INDEX_START;
-                            }
-
-                            effectCurrent = effectIndex;
-
-                            Serial.println(effectCurrent);
-
-                            strip.restartRuntime();
-                            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                        }
-                        // palette
-                        else if (selectedStateIndex == 1)
-                        {
-                            Serial.print("palette change: ");
-                            ++paletteIndex;
-
-                            int numBannedPalettes = sizeof(bannedPalettes) / sizeof(*bannedPalettes);
-
-                            while (std::find(bannedPalettes, bannedPalettes + numBannedPalettes, paletteIndex) != bannedPalettes + numBannedPalettes)
-                            {
-                                ++paletteIndex;
-                            }
-
-                            if (paletteIndex >= NUM_PALETTES)
-                            {
-                                paletteIndex = PALETTE_INDEX_START;
-                            }
-                            
-                            effectPalette = paletteIndex;
-
-                            Serial.println(effectPalette);
-
-                            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                            
-                        }
-                        // brightness
-                        else if (selectedStateIndex == 2)
-                        {
-                            Serial.print("brightness change: ");
-
-                            int currentBrightness = bri;
-                            currentBrightness += SCROLL_STEP;
-
-                            if (currentBrightness > 255)
-                                currentBrightness = 255;
-
-                            bri = currentBrightness;
-
-                            Serial.println(bri);
-
-                            stateUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                        }
-                        // speed
-                        else if (selectedStateIndex == 3)
-                        {
-                            Serial.print("speed change: ");
-                            
-                            int currentSpeed = effectSpeed;
-                            currentSpeed += SCROLL_STEP;
-
-                            if (currentSpeed > 255)
-                                currentSpeed = 255;
-
-                            effectSpeed = currentSpeed;
-
-                            Serial.println(effectSpeed);
-
-                            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                        }
-                        // intensity
-                        else if (selectedStateIndex == 4)
-                        {
-                            Serial.print("intensity change: ");
-
-                            int currentIntensity = effectIntensity;
-                            currentIntensity += SCROLL_STEP;
-
-                            if (currentIntensity > 255)
-                                currentIntensity = 255;
-
-                            effectIntensity = currentIntensity;
-
-                            Serial.println(effectIntensity);
-
-                            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                        }
+                        onEncoderRotatedWhilePressed(true);
                     }
-                    // Rotating left while pressing.
-                    else if (encoderB == LOW && buttonState == LOW)
+                    else if (encoderB == HIGH) // Rotating clockwise
                     {
-                        --selectedStateIndex;
-
-                        if (selectedStateIndex < 0)
-                            selectedStateIndex = numStates - 1;
-
-                        Serial.println("Rotating left while pressing.");
+                        if (selectedStateIndex == 0) // effect
+                            onEncoderRotatedQualitative(true, true);
+                        else if (selectedStateIndex == 1) // palette
+                            onEncoderRotatedQualitative(true, false);
+                        else if (selectedStateIndex == 2) // brightness
+                            onEncoderRotatedQuantitative(true, 0);
+                        else if (selectedStateIndex == 3) // speed
+                            onEncoderRotatedQuantitative(true, 1);
+                        else if (selectedStateIndex == 4) // intensity
+                            onEncoderRotatedQuantitative(true, 2);
                     }
-                    // Rotating left.
-                    else if (encoderB == LOW)
+                    else if (encoderB == LOW && buttonState == LOW) // Rotating counterclockwise while pressing.
                     {
-                        Serial.println("Rotating left.");
-
-                        // effect
-                        if (selectedStateIndex == 0)
-                        {
-                            Serial.print("effect change: ");
-                            
-                            --effectIndex;
-
-                            int numBannedEffects = sizeof(bannedEffects) / sizeof(*bannedEffects);
-
-                            while (std::find(bannedEffects, bannedEffects + numBannedEffects, effectIndex) != bannedEffects + numBannedEffects)
-                            {
-                                --effectIndex;
-                            }
-
-                            if (effectIndex < 0)
-                            {
-                                effectIndex = NUM_EFFECTS - 1;
-                            }
-
-                            effectCurrent = effectIndex;
-
-                            Serial.println(effectCurrent);
-
-                            strip.restartRuntime();
-                            colorUpdated(CALL_MODE_BUTTON);
-                            updateInterfaces(CALL_MODE_BUTTON);
-                        }
-                        // palette
-                        else if (selectedStateIndex == 1)
-                        {
-                            Serial.print("palette change: ");
-
-                            --paletteIndex;
-
-                            int numBannedPalettes = sizeof(bannedPalettes) / sizeof(*bannedPalettes);
-
-                            while (std::find(bannedPalettes, bannedPalettes + numBannedPalettes, paletteIndex) != bannedPalettes + numBannedPalettes)
-                            {
-                                --paletteIndex;
-                            }
-
-                            if (paletteIndex < 0)
-                            {
-                                paletteIndex = NUM_PALETTES - 1;
-                            }
-
-                            effectPalette = paletteIndex;
-
-                            Serial.println(effectPalette);
-
-                            colorUpdated(CALL_MODE_BUTTON);
-                            updateInterfaces(CALL_MODE_BUTTON);
-                        }
-                        // brightness
-                        else if (selectedStateIndex == 2)
-                        {
-
-                            Serial.print("brightness change: ");
-
-                            int currentBrightness = bri;
-                            currentBrightness -= SCROLL_STEP;
-
-                            if (currentBrightness < 0)
-                                currentBrightness = 0;
-
-                            bri = currentBrightness;
-
-                            Serial.println(bri);
-
-                            stateUpdated(CALL_MODE_BUTTON);
-                            updateInterfaces(CALL_MODE_BUTTON);
-                        }
-                        // speed
-                        else if (selectedStateIndex == 3)
-                        {
-                            Serial.print("speed change: ");
-                            
-                            int currentSpeed = effectSpeed;
-                            currentSpeed -= SCROLL_STEP;
-
-                            if (currentSpeed < 0)
-                                currentSpeed = 0;
-
-                            effectSpeed = currentSpeed;
-
-                            Serial.println(effectSpeed);
-
-                            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                        }
-                        // intensity
-                        else if (selectedStateIndex == 4)
-                        {
-                            Serial.print("intensity change: ");
-
-                            int currentIntensity = effectIntensity;
-                            currentIntensity -= SCROLL_STEP;
-
-                            if (currentIntensity < 0)
-                                currentIntensity = 0;
-
-                            effectIntensity = currentIntensity;
-
-                            Serial.println(effectIntensity);
-
-                            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-                            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-                        }
-
-                        
+                        onEncoderRotatedWhilePressed(false);
+                    }
+                    else if (encoderB == LOW) // Rotating counterclockwise.
+                    {
+                        if (selectedStateIndex == 0) // effect
+                            onEncoderRotatedQualitative(false, true);
+                        else if (selectedStateIndex == 1) // palette
+                            onEncoderRotatedQualitative(false, false);
+                        else if (selectedStateIndex == 2) // brightness
+                            onEncoderRotatedQuantitative(false, 0);
+                        else if (selectedStateIndex == 3) // speed
+                            onEncoderRotatedQuantitative(false, 1);
+                        else if (selectedStateIndex == 4) // intensity
+                            onEncoderRotatedQuantitative(false, 2);
                     }
 
                     updateOled();
                 }
                 
-
                 if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
                 {
                     u8x8.setPowerSave(1);
