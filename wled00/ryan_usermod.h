@@ -1,12 +1,29 @@
 #pragma once
-
 #include "wled.h"
 #include <Arduino.h>
 #include <U8x8lib.h>
 #include <string>
 
+// OLED
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
+
+// Rotary encoder
+#define CLK_PIN 14  // D6
+#define DT_PIN 12  // D5
+#define SW_PIN 13  //D7
+#define SCROLL_STEP 5
+
+// Modes
+#define NUM_STATES 5
+
+// Effects
+#define NUM_EFFECTS 118
+#define EFFECT_INDEX_START 1
+
+// Palettes
+#define NUM_PALETTES 71
+#define PALETTE_INDEX_START 6
 
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA); // Pins are Reset, SCL, SDA
 
@@ -19,28 +36,18 @@ class RyanUsermod : public Usermod
 
         static const int numStates = 5;
         int selectedStateIndex = 0;
-        const String friendlyStateNames[numStates] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "FX SPECIFIC" };
+        const String friendlyStateNames[numStates] = { "EFFECT:", "PALETTE:", "BRIGHTNESS:", "SPEED:", "FX SPECIFIC:" };
 
-        static const int numEffects = 118;
-        static const int effectIndexStart = 1;
-        int effectIndex = effectIndexStart;
+        int effectIndex = EFFECT_INDEX_START;
         const int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
 
-        static const int numPalettes = 71;
-        static const int paletteIndexStart = 6;
-        int paletteIndex = paletteIndexStart;
+        int paletteIndex = PALETTE_INDEX_START;
         const int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
         
         unsigned char buttonState = HIGH;
         unsigned char prevButtonState = HIGH;
 
         unsigned char encoderAPrev = 0;
-
-        int clkPin = 14;  // d6
-        int dtPin = 12;    // d5
-        int swPin = 13;    // d7
-
-        unsigned int scrollStep = 5;
 
         long lastOledUpdate = 0;
         bool oledTurnedOff = true;
@@ -49,9 +56,9 @@ class RyanUsermod : public Usermod
     public:
         void setup()
         {
-            pinMode(clkPin, INPUT_PULLUP);
-            pinMode(dtPin, INPUT_PULLUP);
-            pinMode(swPin, INPUT_PULLUP);
+            pinMode(CLK_PIN, INPUT_PULLUP);
+            pinMode(DT_PIN, INPUT_PULLUP);
+            pinMode(SW_PIN, INPUT_PULLUP);
 
             currentTime = millis();
             loopTime = currentTime;
@@ -71,7 +78,19 @@ class RyanUsermod : public Usermod
             u8x8.begin();
             u8x8.setPowerSave(0);
             u8x8.setContrast(255);
-            u8x8.setFont(u8x8_font_chroma48medium8_r);
+
+            /*
+                u8x8_font_8x13B_1x2_r:  TOO BIG
+                u8x8_font_lucasarts_scumm_subtitle_o_2x2_r:  TOO BIG
+                u8x8_font_lucasarts_scumm_subtitle_r_2x2_r:  TOO BIG
+                u8x8_font_px437wyse700a_2x2_r:  TOO BIG
+
+                u8x8_font_chroma48medium8_r:  GOOD BUT WANT BIGGER
+                u8x8_font_pressstart2p_r:  GOOD BUT WANT BIGGER
+                u8x8_font_torussansbold8_r: GOOD BUT WANT BIGGER
+            */
+           //
+            u8x8.setFont(u8x8_font_pcsenior_u);
 
             u8x8.drawString(0, 1, "PRESS + TURN");
             u8x8.drawString(0, 2, "TO CHANGE");
@@ -99,7 +118,7 @@ class RyanUsermod : public Usermod
                 printedChars -= 2;
             }
 
-            return (String) lineBuffer;
+            return (String) lineBuffer;        
         }
 
 
@@ -175,9 +194,9 @@ class RyanUsermod : public Usermod
 
             if (currentTime >= (loopTime + 2))
             {
-                int encoderA = digitalRead(dtPin);
-                int encoderB = digitalRead(clkPin);
-                buttonState = digitalRead(swPin);
+                int encoderA = digitalRead(DT_PIN);
+                int encoderB = digitalRead(CLK_PIN);
+                buttonState = digitalRead(SW_PIN);
 
                 if ((!encoderA) && encoderAPrev)
                 {
@@ -215,9 +234,9 @@ class RyanUsermod : public Usermod
                                 ++effectIndex;
                             }
 
-                            if (effectIndex >= numEffects)
+                            if (effectIndex >= NUM_EFFECTS)
                             {
-                                effectIndex = effectIndexStart;
+                                effectIndex = EFFECT_INDEX_START;
                             }
 
                             effectCurrent = effectIndex;
@@ -241,9 +260,9 @@ class RyanUsermod : public Usermod
                                 ++paletteIndex;
                             }
 
-                            if (paletteIndex >= numPalettes)
+                            if (paletteIndex >= NUM_PALETTES)
                             {
-                                paletteIndex = paletteIndexStart;
+                                paletteIndex = PALETTE_INDEX_START;
                             }
                             
                             effectPalette = paletteIndex;
@@ -260,7 +279,7 @@ class RyanUsermod : public Usermod
                             Serial.print("brightness change: ");
 
                             int currentBrightness = bri;
-                            currentBrightness += scrollStep;
+                            currentBrightness += SCROLL_STEP;
 
                             if (currentBrightness > 255)
                                 currentBrightness = 255;
@@ -278,7 +297,7 @@ class RyanUsermod : public Usermod
                             Serial.print("speed change: ");
                             
                             int currentSpeed = effectSpeed;
-                            currentSpeed += scrollStep;
+                            currentSpeed += SCROLL_STEP;
 
                             if (currentSpeed > 255)
                                 currentSpeed = 255;
@@ -296,7 +315,7 @@ class RyanUsermod : public Usermod
                             Serial.print("intensity change: ");
 
                             int currentIntensity = effectIntensity;
-                            currentIntensity += scrollStep;
+                            currentIntensity += SCROLL_STEP;
 
                             if (currentIntensity > 255)
                                 currentIntensity = 255;
@@ -340,7 +359,7 @@ class RyanUsermod : public Usermod
 
                             if (effectIndex < 0)
                             {
-                                effectIndex = numEffects - 1;
+                                effectIndex = NUM_EFFECTS - 1;
                             }
 
                             effectCurrent = effectIndex;
@@ -367,7 +386,7 @@ class RyanUsermod : public Usermod
 
                             if (paletteIndex < 0)
                             {
-                                paletteIndex = numPalettes - 1;
+                                paletteIndex = NUM_PALETTES - 1;
                             }
 
                             effectPalette = paletteIndex;
@@ -384,7 +403,7 @@ class RyanUsermod : public Usermod
                             Serial.print("brightness change: ");
 
                             int currentBrightness = bri;
-                            currentBrightness -= scrollStep;
+                            currentBrightness -= SCROLL_STEP;
 
                             if (currentBrightness < 0)
                                 currentBrightness = 0;
@@ -402,7 +421,7 @@ class RyanUsermod : public Usermod
                             Serial.print("speed change: ");
                             
                             int currentSpeed = effectSpeed;
-                            currentSpeed -= scrollStep;
+                            currentSpeed -= SCROLL_STEP;
 
                             if (currentSpeed < 0)
                                 currentSpeed = 0;
@@ -420,7 +439,7 @@ class RyanUsermod : public Usermod
                             Serial.print("intensity change: ");
 
                             int currentIntensity = effectIntensity;
-                            currentIntensity -= scrollStep;
+                            currentIntensity -= SCROLL_STEP;
 
                             if (currentIntensity < 0)
                                 currentIntensity = 0;
