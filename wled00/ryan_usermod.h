@@ -19,18 +19,20 @@ class RyanUsermod : public Usermod
         unsigned long loopTime;
 
         enum State {effect, palette, brightness, speed, intensity};
-        State selectedState = effect;
+        //State selectedState = effect;
+        int selectedStateIndex = 0;
+        const int numStates = 5;
         const char* friendlyStateNames[5] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "FX SPECIFIC" };
 
-        unsigned int numEffects = 118;
-        unsigned int effectIndexStart = 1;
-        unsigned int effectIndex = effectIndexStart;
+        const int numEffects = 118;
+        const int effectIndexStart = 1;
+        int effectIndex = effectIndexStart;
         int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
         char* effectFriendlyName;
 
-        unsigned int numPalettes = 71;
-        unsigned int paletteIndexStart = 6;
-        unsigned int paletteIndex = paletteIndexStart;
+        const int numPalettes = 71;
+        const int paletteIndexStart = 6;
+        int paletteIndex = paletteIndexStart;
         int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
         char* paletteFriendlyName;
         
@@ -74,13 +76,12 @@ class RyanUsermod : public Usermod
             u8x8.begin();
             u8x8.setPowerSave(0);
             u8x8.setContrast(125);
-            //u8x8.setFont(u8x8_font_5x8_f);
             u8x8.setFont(u8x8_font_chroma48medium8_r);
-            u8x8.drawString(1, 1, "LED MATRIX");
-            u8x8.drawString(1, 3, "PRESS TO");
-            u8x8.drawString(1, 4, "CHANGE FUNCTION");
-            u8x8.drawString(1, 6, "TURN TO");
-            u8x8.drawString(1, 7, "CHANGE VALUE");
+            u8x8.drawString(0, 1, "PRESS + TURN");
+            u8x8.drawString(0, 2, "TO CHANGE");
+            u8x8.drawString(0, 3, "THE MODE");
+            u8x8.drawString(0, 5, "TURN TO");
+            u8x8.drawString(0, 6, "CHANGE VALUE");
         }
 
 
@@ -125,8 +126,14 @@ class RyanUsermod : public Usermod
             lastOledUpdate = millis();
 
             u8x8.clear();
+            u8x8.setCursor(0, 0);
+            u8x8.print(selectedStateIndex + 1);
             u8x8.setCursor(1, 0);
-            u8x8.println(friendlyStateNames[selectedState]);
+            u8x8.print(".");
+            u8x8.setCursor(2, 0);
+            u8x8.println(friendlyStateNames[selectedStateIndex]);
+
+            State selectedState = static_cast<State>(selectedStateIndex);
 
             if (selectedState == effect)
             {
@@ -195,56 +202,28 @@ class RyanUsermod : public Usermod
 
             if (currentTime >= (loopTime + 2))
             {
-                buttonState = digitalRead(swPin);
-
-                if (prevButtonState != buttonState)
-                {
-                    if (buttonState == LOW)
-                    {
-                        if (oledTurnedOff)
-                        {
-                            u8x8.setPowerSave(0);
-                            oledTurnedOff = false;
-                        }
-                        else if (selectedState == effect)
-                        {
-                            selectedState = palette;
-                        }
-                        else if (selectedState == palette)
-                        {
-                            selectedState = brightness;
-                        }
-                        else if (selectedState == brightness)
-                        {
-                            selectedState = speed;
-                        }
-                        else if (selectedState == speed)
-                        {
-                            selectedState = intensity;
-                        }
-                        else if (selectedState == intensity)
-                        {
-                            selectedState = effect;
-                        }
-
-                        prevButtonState = buttonState;
-                    }
-                    else
-                    {
-                        prevButtonState = buttonState;
-                    }
-
-                    updateOled();
-                }
-            
-
                 int encoderA = digitalRead(dtPin);
                 int encoderB = digitalRead(clkPin);
+                buttonState = digitalRead(swPin);
 
                 if ((!encoderA) && encoderAPrev)
                 {
-                    if (encoderB == HIGH) 
+                    if (encoderB == HIGH && buttonState == LOW)
                     {
+                        ++selectedStateIndex;
+
+                        if (selectedStateIndex >= numStates)
+                            selectedStateIndex = 0;
+
+                        Serial.print("rotating right while pressing: ");
+                        Serial.println(selectedStateIndex);
+                    }
+                    else if (encoderB == HIGH) 
+                    {
+                        Serial.println("rotating right");
+
+                        State selectedState = static_cast<State>(selectedStateIndex);
+
                         if (oledTurnedOff)
                         {
                             u8x8.setPowerSave(0);
@@ -352,11 +331,21 @@ class RyanUsermod : public Usermod
                             colorUpdated(CALL_MODE_DIRECT_CHANGE);
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
+                    }
+                    else if (encoderB == LOW && buttonState == LOW)
+                    {
+                        --selectedStateIndex;
 
-                        updateOled();
+                        if (selectedStateIndex < 0)
+                            selectedStateIndex = numStates - 1;
+
+                        Serial.print("rotating left while pressing: ");
+                        Serial.println(selectedStateIndex);
                     }
                     else if (encoderB == LOW)
                     {
+                        State selectedState = static_cast<State>(selectedStateIndex);
+
                         if (selectedState == effect)
                         {
                             Serial.print("effect change: ");
@@ -462,11 +451,10 @@ class RyanUsermod : public Usermod
                             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
                         }
 
-                        updateOled();
+                        
                     }
 
-
-                    
+                    updateOled();
                 }
                 
 
