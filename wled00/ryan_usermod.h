@@ -3,10 +3,13 @@
 #include <Arduino.h>
 #include <U8x8lib.h>
 #include <string>
+#include <sstream>
 
 // OLED
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
+#define OLED_ROWS 8
+#define OLED_COLS 16
 
 // Rotary encoder
 #define CLK_PIN 14  // D6
@@ -74,29 +77,16 @@ class RyanUsermod : public Usermod
             colorUpdated(CALL_MODE_DIRECT_CHANGE);
             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
 
-            // *** A graphics display with 128x64 pixel has 16 colums and 8 rows ***
             u8x8.begin();
             u8x8.setPowerSave(0);
             u8x8.setContrast(255);
 
-            /*
-                u8x8_font_8x13B_1x2_r:  TOO BIG
-                u8x8_font_lucasarts_scumm_subtitle_o_2x2_r:  TOO BIG
-                u8x8_font_lucasarts_scumm_subtitle_r_2x2_r:  TOO BIG
-                u8x8_font_px437wyse700a_2x2_r:  TOO BIG
-
-                u8x8_font_chroma48medium8_r:  GOOD BUT WANT BIGGER
-                u8x8_font_pressstart2p_r:  GOOD BUT WANT BIGGER
-                u8x8_font_torussansbold8_r: GOOD BUT WANT BIGGER
-            */
-           //
-            u8x8.setFont(u8x8_font_pcsenior_u);
-
-            u8x8.drawString(0, 1, "PRESS + TURN");
-            u8x8.drawString(0, 2, "TO CHANGE");
-            u8x8.drawString(0, 3, "THE MODE");
-            u8x8.drawString(0, 5, "TURN TO");
-            u8x8.drawString(0, 6, "CHANGE VALUE");
+            u8x8.setFont(u8x8_font_chroma48medium8_r);
+            u8x8.drawString(0, 1, "Press & turn");
+            u8x8.drawString(0, 2, "to change modes.");
+            u8x8.drawString(0, 5, "Turn to change");
+            u8x8.drawString(0, 6, "values.");
+            u8x8.setFont(u8x8_font_8x13_1x2_f);
         }
 
 
@@ -127,11 +117,35 @@ class RyanUsermod : public Usermod
 
             u8x8.clear(); // sets cursor to (0, 0), too.
             u8x8.println(friendlyStateNames[selectedStateIndex]);
-            u8x8.setCursor(0, 2);
+            u8x8.setCursor(0, 3);
 
             if (selectedStateIndex == 0) // effect mode
             {
-                u8x8.print(getCurrentEffectOrPaletteName(true));
+                String name = getCurrentEffectOrPaletteName(true);
+
+                // Assumes that if the name is too long
+                // that it contains a space (mostly for "Fireworks Starburst").
+                int nameLength = name.length();
+                if (nameLength > OLED_COLS) 
+                {
+                    char *cstr = const_cast<char*>(name.c_str());
+                    char *token = strtok(cstr, " ");
+
+                    int currentLine = 3;
+                    while (token != NULL)
+                    {
+                        u8x8.print(token);
+
+                        currentLine += 2;
+                        u8x8.setCursor(0, currentLine);
+
+                        token = strtok(NULL, " ");
+                    }
+                }
+                else
+                {
+                    u8x8.print(getCurrentEffectOrPaletteName(true));
+                } 
             }
             else if (selectedStateIndex == 1) // palette mode
             {
@@ -148,7 +162,7 @@ class RyanUsermod : public Usermod
                 u8x8.print(truncVal);
 
                 int numDigits = (truncVal == 0) ? 1 : int(log10(truncVal) + 1);
-                u8x8.setCursor(numDigits, 2);
+                u8x8.setCursor(numDigits, 3);
                 u8x8.println("%");
             }
             else if (selectedStateIndex == 3) // speed mode
@@ -162,7 +176,7 @@ class RyanUsermod : public Usermod
                 u8x8.print(truncVal);
 
                 int numDigits = (truncVal == 0) ? 1 : int(log10(truncVal) + 1);
-                u8x8.setCursor(numDigits, 2);
+                u8x8.setCursor(numDigits, 3);
                 u8x8.println("%");
             }
             else if (selectedStateIndex == 4) // intensity mode (fx specific mode)
@@ -176,7 +190,7 @@ class RyanUsermod : public Usermod
                 u8x8.print(truncVal);
 
                 int numDigits = (truncVal == 0) ? 1 : int(log10(truncVal) + 1);
-                u8x8.setCursor(numDigits, 2);
+                u8x8.setCursor(numDigits, 3);
                 u8x8.println("%");
             }
         }
@@ -192,10 +206,8 @@ class RyanUsermod : public Usermod
         void onEncoderRotatedQualitative(bool direction, bool type)
         {
             int relevantIndex = type ? effectIndex : paletteIndex;
-            Serial.println(relevantIndex);
 
             direction ? ++relevantIndex : --relevantIndex;
-            Serial.println(relevantIndex);
 
             int numBanned = type ? (sizeof(bannedEffects) / sizeof(*bannedEffects)) : (sizeof(bannedPalettes) / sizeof(*bannedPalettes));
 
@@ -210,15 +222,8 @@ class RyanUsermod : public Usermod
                     direction ? ++relevantIndex : --relevantIndex;
             }
 
-            Serial.println(relevantIndex);
-
             int numIndexes = type ? NUM_EFFECTS : NUM_PALETTES;
             int startIndex = type ? EFFECT_INDEX_START : PALETTE_INDEX_START;
-
-            Serial.print("A ");
-            Serial.println(numIndexes);
-            Serial.print("B ");
-            Serial.println(startIndex);
 
             if (direction && relevantIndex >= numIndexes)
             {
@@ -229,8 +234,6 @@ class RyanUsermod : public Usermod
             {
                 relevantIndex = numIndexes - 1;
             }
-
-            Serial.println(relevantIndex);
                 
             if (type)
             {
@@ -246,8 +249,6 @@ class RyanUsermod : public Usermod
 
             colorUpdated(CALL_MODE_DIRECT_CHANGE);
             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
-
-            Serial.println("------------------");
         }
 
 
