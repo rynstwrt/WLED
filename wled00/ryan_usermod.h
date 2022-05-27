@@ -79,8 +79,8 @@ class RyanUsermod : public Usermod
             effectCurrent = effectIndex;
             effectPalette = paletteIndex;
 
-            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
+            colorUpdated(CALL_MODE_NO_NOTIFY);
+            updateInterfaces(CALL_MODE_NO_NOTIFY);
 
             u8x8.begin();
             u8x8.setPowerSave(0);
@@ -104,7 +104,6 @@ class RyanUsermod : public Usermod
         void onEncoderRotatedQualitative(bool direction, bool type)
         {
             int relevantIndex = type ? effectIndex : paletteIndex;
-
             direction ? ++relevantIndex : --relevantIndex;
 
             int numBanned = type ? (sizeof(bannedEffects) / sizeof(*bannedEffects)) : (sizeof(bannedPalettes) / sizeof(*bannedPalettes));
@@ -140,8 +139,8 @@ class RyanUsermod : public Usermod
                 effectPalette = paletteIndex;
             }
 
-            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
+            colorUpdated(CALL_MODE_NO_NOTIFY);
+            updateInterfaces(CALL_MODE_NO_NOTIFY);
         }
 
 
@@ -179,11 +178,11 @@ class RyanUsermod : public Usermod
                 effectIntensity = currentVal;
 
             if (type == 0)
-                stateUpdated(CALL_MODE_DIRECT_CHANGE);
+                stateUpdated(CALL_MODE_NO_NOTIFY);
             else
-                colorUpdated(CALL_MODE_DIRECT_CHANGE);
+                colorUpdated(CALL_MODE_NO_NOTIFY);
 
-            updateInterfaces(CALL_MODE_DIRECT_CHANGE);
+            updateInterfaces(CALL_MODE_NO_NOTIFY);
         }
 
 
