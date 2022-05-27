@@ -5,30 +5,33 @@
 #include <string>
 #include <sstream>
 
-// OLED
+// Main loop macros
+#define LOOP_POLL_DELAY_MS 2
+
+// OLED macros
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
 #define OLED_COLS 16  // Has 8 rows as well.
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA);
 
-// Rotary encoder
+// Rotary encoder macros
 #define CLK_PIN 14  // D6
 #define DT_PIN 12  // D5
 #define SW_PIN 13  //D7
 #define SCROLL_STEP 5
 
-// Modes
+// Mode macros
 #define NUM_STATES 5
 
-// Effects
+// Effect macros
 #define NUM_EFFECTS 118
 #define EFFECT_INDEX_START 1
 
-// Palettes
+// Palette macros
 #define NUM_PALETTES 71
 #define PALETTE_INDEX_START 6
 
-// Fonts
+// Font macros
 #define STARTUP_FONT u8x8_font_chroma48medium8_r
 #define HEADER_FONT u8x8_font_8x13B_1x2_r
 #define VALUE_FONT u8x8_font_8x13_1x2_r
@@ -37,12 +40,13 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 class RyanUsermod : public Usermod 
 {
     private:
-        unsigned long currentTime;
+        //unsigned long currentTime;
+        unsigned long lastLoopTime;
         unsigned long loopTime;
 
         static const int numStates = 5;
         int selectedStateIndex = 0;
-        const String friendlyStateNames[numStates] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "INTENSITY" };
+        const String friendlyStateNames[numStates] = { "EFFECT:", "PALETTE:", "BRIGHTNESS:", "SPEED:", "INTENSITY:" };
 
         int effectIndex = EFFECT_INDEX_START;
         const int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
@@ -69,8 +73,8 @@ class RyanUsermod : public Usermod
             pinMode(DT_PIN, INPUT_PULLUP);
             pinMode(SW_PIN, INPUT_PULLUP);
 
-            currentTime = millis();
-            loopTime = currentTime;
+            lastLoopTime = millis();
+            loopTime = lastLoopTime;
 
             CRGB fastled_col;
             col[0] = fastled_col.Black;
@@ -103,6 +107,14 @@ class RyanUsermod : public Usermod
          */
         void onEncoderRotatedQualitative(bool direction, bool type)
         {
+            if (oledTurnedOff)
+            {
+                u8x8.setPowerSave(0);
+                oledTurnedOff = false;
+                Serial.println("OLED AWAKEN ROT QUAL");
+                return;
+            }
+
             int relevantIndex = type ? effectIndex : paletteIndex;
             direction ? ++relevantIndex : --relevantIndex;
 
@@ -153,6 +165,14 @@ class RyanUsermod : public Usermod
          */
         void onEncoderRotatedQuantitative(bool direction, int type)
         {
+            if (oledTurnedOff)
+            {
+                u8x8.setPowerSave(0);
+                oledTurnedOff = false;
+                Serial.println("OLED AWAKEN ROT QUAN");
+                return;
+            }
+
             int currentVal = 0;
 
             if (type == 0)
@@ -193,6 +213,14 @@ class RyanUsermod : public Usermod
          */
         void onEncoderRotatedWhilePressed(bool direction)
         {
+            if (oledTurnedOff)
+            {
+                u8x8.setPowerSave(0);
+                oledTurnedOff = false;
+                Serial.println("OLED AWAKEN ROT WHILE PRESSED");
+                return;
+            }
+
             direction ? ++selectedStateIndex : --selectedStateIndex;
 
             if (selectedStateIndex >= numStates)
@@ -332,14 +360,23 @@ class RyanUsermod : public Usermod
         }
 
 
+        // void wakeOLEDIfSleeping()
+        // {
+        //     if (oledTurnedOff)
+        //     {
+        //         u8x8.setPowerSave(0);
+        //         oledTurnedOff = false;
+        //         Serial.println("OLED AWAKENED");
+        //     }
+        // }
+
+
         /**
          * @brief Called continuously. For reading events, reading sensors, etc.
          */
         void loop()
         {
-            currentTime = millis();
-
-            if (currentTime >= (loopTime + 2))
+            if (millis() - lastLoopTime > LOOP_POLL_DELAY_MS) 
             {
                 int encoderA = digitalRead(DT_PIN);
                 int encoderB = digitalRead(CLK_PIN);
@@ -347,13 +384,7 @@ class RyanUsermod : public Usermod
 
                 if ((!encoderA) && encoderAPrev)
                 {
-                    if (oledTurnedOff)
-                    {
-                        u8x8.setPowerSave(0);
-                        oledTurnedOff = false;
-                        return;
-                    }
-
+                    Serial.println("rotated");
                     if (encoderB == HIGH && buttonState == LOW) // Rotating clockwise while pressed
                     {
                         onEncoderRotatedWhilePressed(true);
@@ -400,7 +431,7 @@ class RyanUsermod : public Usermod
                 }
 
                 encoderAPrev = encoderA;
-                loopTime = currentTime;
+                lastLoopTime = millis();
             }
         }
 };

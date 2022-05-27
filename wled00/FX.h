@@ -925,7 +925,7 @@ class WS2812FX {
 
 //10 names per line
 const char JSON_mode_names[] PROGMEM = R"=====([
-"Solid","Blink","Breathe","Wipe","Wipe Random","Random Colors","Sweep","Dynamic","Colorloop","Rainbow",
+"Solid","Blinky","Breathe","Wipe","Wipe Random","Random Colors","Sweep","Dynamic","Colorloop","Rainbow",
 "Scan","Scan Dual","Fade","Theater","Theater Rainbow","Running","Saw","Twinkle","Dissolve","Dissolve Rnd",
 "Sparkle","Sparkle Dark","Sparkle+","Strobe","Strobe Rainbow","Strobe Mega","Blink Rainbow","Android","Chase","Chase Random",
 "Chase Rainbow","Chase Flash","Chase Flash Rnd","Rainbow Runner","Colorful","Traffic Light","Sweep Random","Chase 2","Aurora","Stream",
@@ -950,5 +950,31 @@ const char JSON_palette_names[] PROGMEM = R"=====([
 "Semi Blue","Pink Candy","Red Reaf","Aqua Flash","Yelblu Hot","Lite Light","Red Flash","Blink Red","Red Shift","Red Tide",
 "Candy2"
 ])=====";
+// const char JSON_mode_names[] PROGMEM = R"=====([
+// "Solid","Blink","Breathe","Wipe","Wipe Random","Random Colors","Sweep","Dynamic","Color Loop","Rainbow",
+// "Scan","Scan Dual","Fade","Theater","Theater Rainbow","Running","Saw","Twinkle","Dissolve","Random Dissolve",
+// "Sparkle","Sparkle Dark","Sparkle+","Strobe","Strobe Rainbow","Strobe Mega","Blink Rainbow","Android","Chase","Random Chase",
+// "Rainbow Chase","Chase Flash","Random Chase Flash","Rainbow Runner","Colorful","Traffic Light","Random Sweep","Chase 2","Aurora","Stream",
+// "Scanner","Lighthouse","Fireworks","Rain","Tetris","Fire Flicker","Gradient","Loading","Police","Fairy",
+// "Two Dots","Fairy Twinkle","Dual Running","Halloween","Chase 3","Tri Wipe","Tri Fade","Lightning","ICU","Multi Comet",
+// "Dual Scanner","Stream 2","Oscillate","Pride","Juggle","Palette","Fire","Color Waves","Back & Forth","Fill Noise",
+// "Noise 1","Noise 2","Noise 3","Noise 4","Color Twinkles","Lake","Meteor","Meteor Smooth","Railway","Ripple",
+// "Twinkle Fox","Twinkle Cat","Halloween Eyes","Solid Pattern","Solid Pattern Tri","Spots","Spots Fade","Glitter","Candle","Fireworks Starburst",
+// "Fireworks 1D","Bouncing Balls","Sinelon","Dual Sinelon","Rainbow Sinelon","Popcorn","Drip","Plasma","Percent","Ripple Rainbow",
+// "Heartbeat","Pacifica","Multi Candle", "Solid Glitter","Sunrise","Phased","Twinkle Up","Palette Noise", "Sine","Phased Noise",
+// "Flow","Chunchun","Dancing Shadows","Washing Machine","Candy Cane","Blends","TV Simulator","Dynamic Smooth"
+// ])=====";
+
+
+// const char JSON_palette_names[] PROGMEM = R"=====([
+// "Default","* Random Cycle","* Color 1","* Colors 1&2","* Color Gradient","* Colors Only","Party","Cloud","Lava","Ocean",
+// "Forest","Rainbow","Rainbow Bands","Sunset","Rivendell","Breeze","Red & Blue","Yellowout","Analogous","Splash",
+// "Pastel","Sunset 2","Beech","Vintage","Departure","Landscape","Beach","Sherbet","Hult","Hult 64",
+// "Drywet","Jul","Grintage","Rewhi","Tertiary","Fire","Icefire","Cyane","Light Pink","Autumn",
+// "Magenta","Magred","Yelmag","Yelblu","Orange & Teal","Tiamat","April Night","Orangery","C9","Sakura",
+// "Aurora","Atlantica","C9 2","C9 New","Temperature","Aurora 2","Retro Clown","Candy","Toxy Reaf","Fairy Reaf",
+// "Semi Blue","Pink Candy","Red Reaf","Aqua Flash","Yelblu Hot","Lite Light","Red Flash","Blink Red","Red Shift","Red Tide",
+// "Candy2"
+// ])=====";
 
 #endif
