@@ -11,7 +11,6 @@
 // OLED macros
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
-#define OLED_COLS 16  // Has 8 rows as well.
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA);
 
 // Rotary encoder macros
@@ -41,7 +40,6 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 class RyanUsermod : public Usermod 
 {
     private:
-        //unsigned long currentTime;
         unsigned long lastLoopTime;
         unsigned long loopTime;
 
@@ -306,32 +304,37 @@ class RyanUsermod : public Usermod
             if (selectedStateIndex == 0) // effect mode
             {
                 // Assumes that if the name is too long that it contains a space (e.g. "Fireworks Starburst").
+                // Also assumes that the first 2 words will fit on 1 line
+                // if the effect is a 3 space-separated words.
                 String name = getCurrentEffectOrPaletteName(true);
                 int nameLength = name.length(); 
 
-                if (nameLength > OLED_COLS) 
+                if (nameLength > u8x8.getCols()) 
                 {
-                    char tokens[MAX_EFFECT_NAME_PARTS] = { NULL };
-                    int tokenIndex = 0;
-
                     char* cstr = const_cast<char*>(name.c_str());
                     char* token = strtok(cstr, " ");
 
+                    int numTokens = 0;
+                    char* tokens[MAX_EFFECT_NAME_PARTS] = { (char*) "" };
+
                     while (token != NULL)
                     {
-                        tokens[tokenIndex] = *token;
-                        ++tokenIndex;
-                        u8x8.drawString(0, valueLineNum, token);
-                        valueLineNum += 2;
+                        tokens[numTokens] = token;
+                        ++numTokens;
                         token = strtok(NULL, " ");
                     }
 
-                    Serial.println("tokens begin");
-                    for (int i = 0; i < MAX_EFFECT_NAME_PARTS; ++i)
+                    if (numTokens == 2)
                     {
-                        Serial.println(tokens[i]);
+                        u8x8.drawString(0, valueLineNum, tokens[0]);
+                        u8x8.drawString(0, valueLineNum + 2, tokens[1]);
                     }
-                    Serial.println("tokens end");
+                    else if (numTokens == 3)
+                    {
+                        std::string firstLine = tokens[0] + (std::string) " " + (std::string) tokens[1];
+                        u8x8.drawString(0, valueLineNum, firstLine.c_str());
+                        u8x8.drawString(0, valueLineNum + 2, tokens[2]);
+                    }
                 }
                 else
                 {
