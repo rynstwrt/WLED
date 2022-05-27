@@ -1,7 +1,7 @@
 #pragma once
 #include "wled.h"
 #include <Arduino.h>
-#include <u8g2lib.h>
+#include <U8x8lib.h>
 #include <string>
 #include <sstream>
 
@@ -9,7 +9,7 @@
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
 #define OLED_COLS 16  // Has 8 rows as well.
-U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, OLED_PIN_SCL, OLED_PIN_SDA);
+U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA);
 
 // Rotary encoder
 #define CLK_PIN 14  // D6
@@ -29,12 +29,9 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, OLED_PIN_SCL, OLED_PIN_SDA);
 #define PALETTE_INDEX_START 6
 
 // Fonts
-#define STARTUP_FONT u8g2_font_chroma48medium8_8r
-#define HEADER_FONT u8g2_font_8x13B_tf
-#define VALUE_FONT u8g2_font_8x13_tf
-#define HORIZONTAL_FONT_PADDING 2  // The left margin of each text line.
-#define VERTICAL_FONT_PADDING 5  // The top margin of the first line of text.
-#define FONT_LINE_SPACING 5  // How far each line are spaced from eachother (in pixels).
+#define STARTUP_FONT u8x8_font_chroma48medium8_r
+#define HEADER_FONT u8x8_font_8x13B_1x2_r
+#define VALUE_FONT u8x8_font_8x13_1x2_r
 
 
 class RyanUsermod : public Usermod 
@@ -60,7 +57,6 @@ class RyanUsermod : public Usermod
 
         long lastOledUpdate = 0;
         bool oledTurnedOff = true;
-        const int fontPixelHeights[3] = {6, 10, 9}; // In order of STARTUP_FONT, HEADER_FONT, and VALUE_FONT.
 
 
     public:
@@ -86,26 +82,15 @@ class RyanUsermod : public Usermod
             colorUpdated(CALL_MODE_DIRECT_CHANGE);
             updateInterfaces(CALL_MODE_DIRECT_CHANGE);
 
-            u8g2.begin();
-            u8g2.setPowerSave(0);
-            u8g2.setContrast(255);
-            u8g2.setFont(STARTUP_FONT);
+            u8x8.begin();
+            u8x8.setPowerSave(0);
+            u8x8.setContrast(255);
+            u8x8.setFont(STARTUP_FONT);
 
-            int fontHeight = fontPixelHeights[0];
-            int startupCurrentHeight = VERTICAL_FONT_PADDING + fontHeight;
-            
-            u8g2.drawStr(HORIZONTAL_FONT_PADDING, startupCurrentHeight, "Press & turn");
-            
-            startupCurrentHeight += fontHeight + FONT_LINE_SPACING;
-            u8g2.drawStr(HORIZONTAL_FONT_PADDING, startupCurrentHeight, "to change modes.");
-
-            startupCurrentHeight += 2 * (fontHeight + FONT_LINE_SPACING);
-            u8g2.drawStr(HORIZONTAL_FONT_PADDING, startupCurrentHeight, "Turn to change");
-
-            startupCurrentHeight += fontHeight + FONT_LINE_SPACING;
-            u8g2.drawStr(HORIZONTAL_FONT_PADDING, startupCurrentHeight, "values.");
-            
-            u8g2.sendBuffer();
+            u8x8.drawString(0, 0, "Press & turn");
+            u8x8.drawString(0, 1, "to change modes.");
+            u8x8.drawString(0, 3, "Turn to change");
+            u8x8.drawString(0, 4, "values.");
         }
 
 
@@ -139,14 +124,9 @@ class RyanUsermod : public Usermod
             int startIndex = type ? EFFECT_INDEX_START : PALETTE_INDEX_START;
 
             if (direction && relevantIndex >= numIndexes)
-            {
                 relevantIndex = startIndex;
-            }
-
-            if (!direction && relevantIndex < 0)
-            {
+            else if (!direction && relevantIndex < 0)
                 relevantIndex = numIndexes - 1;
-            }
                 
             if (type)
             {
@@ -267,6 +247,25 @@ class RyanUsermod : public Usermod
 
 
         /**
+         * @brief Concat 2 datatypes into 1 string.
+         * 
+         * @tparam T The datatype of the second parameter.
+         * @tparam U The datatype of the second parameter.
+         * @param a The value of the first argument.
+         * @param b The value of the second argument.
+         * @return std::string The concatinated result.
+         */
+        template<class T, class U>
+        std::string typeConcat(T a, U b)
+        {
+            std::ostringstream oss;
+            oss << a;
+            oss << b;
+            return oss.str();
+        }
+
+
+        /**
          * Updates the OLED to show the updated mode or value 
          * when the rotary encoder is turned.
          */
@@ -274,15 +273,10 @@ class RyanUsermod : public Usermod
         {
             lastOledUpdate = millis();
 
-            u8g2.clearBuffer();
-            u8g2.setFont(HEADER_FONT);
-            int headerFontHeight = fontPixelHeights[1];
-            int currentHeight = VERTICAL_FONT_PADDING + headerFontHeight;
-            u8g2.drawStr(HORIZONTAL_FONT_PADDING, currentHeight, friendlyStateNames[selectedStateIndex].c_str());
-
-            u8g2.setFont(VALUE_FONT);
-            int valueFontHeight = fontPixelHeights[2];
-            currentHeight += 2 * (valueFontHeight + FONT_LINE_SPACING);
+            u8x8.setFont(HEADER_FONT);
+            u8x8.drawString(0, 0, friendlyStateNames[selectedStateIndex].c_str());
+            u8x8.setFont(VALUE_FONT);
+            int valueLineNum = 2;
 
             if (selectedStateIndex == 0) // effect mode
             {
@@ -298,19 +292,18 @@ class RyanUsermod : public Usermod
 
                     while (token != NULL)
                     {
-                        u8g2.drawStr(HORIZONTAL_FONT_PADDING, currentHeight, token);
-                        currentHeight += valueFontHeight + FONT_LINE_SPACING;
+                        u8x8.drawString(0, valueLineNum, token);
                         token = strtok(NULL, " ");
                     }
                 }
                 else
                 {
-                    u8g2.drawStr(HORIZONTAL_FONT_PADDING, currentHeight, name.c_str());
+                    u8x8.drawString(0, valueLineNum, name.c_str());
                 } 
             }
             else if (selectedStateIndex == 1) // palette mode
             {
-                u8g2.drawStr(HORIZONTAL_FONT_PADDING, currentHeight, getCurrentEffectOrPaletteName(false).c_str());
+                u8x8.drawString(0, valueLineNum, getCurrentEffectOrPaletteName(false).c_str());
             }
             else // brightness, speed, and intensity modes
             {
@@ -334,10 +327,9 @@ class RyanUsermod : public Usermod
                 if (value == NAN) return;
 
                 int percent = valueToPercent(value);
-                u8g2.drawUTF8(HORIZONTAL_FONT_PADDING, currentHeight, percent + "%");
+                std::string concat = typeConcat(percent, "%");
+                u8x8.drawString(0, valueLineNum, concat.c_str());
             }
-
-            u8g2.sendBuffer();
         }
 
 
@@ -358,7 +350,7 @@ class RyanUsermod : public Usermod
                 {
                     if (oledTurnedOff)
                     {
-                        u8g2.setPowerSave(0);
+                        u8x8.setPowerSave(0);
                         oledTurnedOff = false;
                         return;
                     }
@@ -398,12 +390,13 @@ class RyanUsermod : public Usermod
                             onEncoderRotatedQuantitative(false, 2);
                     }
 
+                    u8x8.clear();
                     updateOled();
                 }
                 
                 if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
                 {
-                    u8g2.setPowerSave(1);
+                    u8x8.setPowerSave(1);
                     oledTurnedOff = true;
                 }
 
