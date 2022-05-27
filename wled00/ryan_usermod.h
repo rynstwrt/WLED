@@ -26,6 +26,7 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 // Effect macros
 #define NUM_EFFECTS 118
 #define EFFECT_INDEX_START 1
+#define MAX_EFFECT_NAME_PARTS 3  // The max potential number of space-separated words in a given effect name.
 
 // Palette macros
 #define NUM_PALETTES 71
@@ -111,7 +112,6 @@ class RyanUsermod : public Usermod
             {
                 u8x8.setPowerSave(0);
                 oledTurnedOff = false;
-                Serial.println("OLED AWAKEN ROT QUAL");
                 return;
             }
 
@@ -169,7 +169,6 @@ class RyanUsermod : public Usermod
             {
                 u8x8.setPowerSave(0);
                 oledTurnedOff = false;
-                Serial.println("OLED AWAKEN ROT QUAN");
                 return;
             }
 
@@ -217,7 +216,6 @@ class RyanUsermod : public Usermod
             {
                 u8x8.setPowerSave(0);
                 oledTurnedOff = false;
-                Serial.println("OLED AWAKEN ROT WHILE PRESSED");
                 return;
             }
 
@@ -307,21 +305,33 @@ class RyanUsermod : public Usermod
 
             if (selectedStateIndex == 0) // effect mode
             {
-                // Assumes that if the name is too long
-                // that it contains a space (mostly for "Fireworks Starburst").
+                // Assumes that if the name is too long that it contains a space (e.g. "Fireworks Starburst").
                 String name = getCurrentEffectOrPaletteName(true);
-                int nameLength = name.length();
+                int nameLength = name.length(); 
 
                 if (nameLength > OLED_COLS) 
                 {
-                    char *cstr = const_cast<char*>(name.c_str());
-                    char *token = strtok(cstr, " ");
+                    char tokens[MAX_EFFECT_NAME_PARTS] = { NULL };
+                    int tokenIndex = 0;
+
+                    char* cstr = const_cast<char*>(name.c_str());
+                    char* token = strtok(cstr, " ");
 
                     while (token != NULL)
                     {
+                        tokens[tokenIndex] = *token;
+                        ++tokenIndex;
                         u8x8.drawString(0, valueLineNum, token);
+                        valueLineNum += 2;
                         token = strtok(NULL, " ");
                     }
+
+                    Serial.println("tokens begin");
+                    for (int i = 0; i < MAX_EFFECT_NAME_PARTS; ++i)
+                    {
+                        Serial.println(tokens[i]);
+                    }
+                    Serial.println("tokens end");
                 }
                 else
                 {
@@ -360,17 +370,6 @@ class RyanUsermod : public Usermod
         }
 
 
-        // void wakeOLEDIfSleeping()
-        // {
-        //     if (oledTurnedOff)
-        //     {
-        //         u8x8.setPowerSave(0);
-        //         oledTurnedOff = false;
-        //         Serial.println("OLED AWAKENED");
-        //     }
-        // }
-
-
         /**
          * @brief Called continuously. For reading events, reading sensors, etc.
          */
@@ -384,7 +383,6 @@ class RyanUsermod : public Usermod
 
                 if ((!encoderA) && encoderAPrev)
                 {
-                    Serial.println("rotated");
                     if (encoderB == HIGH && buttonState == LOW) // Rotating clockwise while pressed
                     {
                         onEncoderRotatedWhilePressed(true);
@@ -422,6 +420,14 @@ class RyanUsermod : public Usermod
 
                     u8x8.clear();
                     updateOled();
+                }
+                else if (buttonState == LOW && oledTurnedOff) // Allow for button press down to wake OLED when asleep.
+                {
+                    u8x8.setPowerSave(0);
+                    oledTurnedOff = false;
+                    u8x8.clear();
+                    updateOled();
+                    return;
                 }
                 
                 if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
