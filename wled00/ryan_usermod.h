@@ -45,7 +45,7 @@ class RyanUsermod : public Usermod
 
         static const int numStates = 5;
         int selectedStateIndex = 0;
-        const String friendlyStateNames[numStates] = { "EFFECT:", "PALETTE:", "BRIGHTNESS:", "SPEED:", "INTENSITY:" };
+        const String friendlyStateNames[numStates] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "INTENSITY" };
 
         int effectIndex = EFFECT_INDEX_START;
         const int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
@@ -270,7 +270,8 @@ class RyanUsermod : public Usermod
 
 
         /**
-         * @brief Concat 2 datatypes into 1 string.
+         * Concat 2 datatypes (mostly "int/const char*" and "std::string/const char*" pairs) 
+         * into a single std::string.
          * 
          * @tparam T The datatype of the second parameter.
          * @tparam U The datatype of the second parameter.
@@ -297,21 +298,30 @@ class RyanUsermod : public Usermod
             lastOledUpdate = millis();
 
             u8x8.setFont(HEADER_FONT);
-            u8x8.drawString(0, 0, friendlyStateNames[selectedStateIndex].c_str());
+            String headerName = friendlyStateNames[selectedStateIndex];
+            u8x8.drawString(0, 0, headerName.c_str());
+
+            int headerLength = headerName.length();
+            uint8_t tiles[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
+            for (int i = 0; i < headerLength; ++i) // Draw a thin line under the header text.
+            {
+                u8x8.drawTile(i, 2, 1, tiles);
+            }
+
             u8x8.setFont(VALUE_FONT);
-            int valueLineNum = 2;
+            int valueLineNum = 3;
 
             if (selectedStateIndex == 0) // effect mode
             {
                 // Assumes that if the name is too long that it contains a space (e.g. "Fireworks Starburst").
                 // Also assumes that the first 2 words will fit on 1 line
                 // if the effect is a 3 space-separated words.
-                String name = getCurrentEffectOrPaletteName(true);
-                int nameLength = name.length(); 
+                String effectName = getCurrentEffectOrPaletteName(true);
+                int nameLength = effectName.length() + 1; // +1 for the ">" prefix.
 
                 if (nameLength > u8x8.getCols()) 
                 {
-                    char* cstr = const_cast<char*>(name.c_str());
+                    char* cstr = const_cast<char*>(effectName.c_str());
                     char* token = strtok(cstr, " ");
 
                     int numTokens = 0;
@@ -323,6 +333,9 @@ class RyanUsermod : public Usermod
                         ++numTokens;
                         token = strtok(NULL, " ");
                     }
+
+                    const char* firstTokenVal = tokens[0];
+                    tokens[0] = (char*) typeConcat(">", firstTokenVal).c_str();
 
                     if (numTokens == 2)
                     {
@@ -338,17 +351,17 @@ class RyanUsermod : public Usermod
                 }
                 else
                 {
-                    u8x8.drawString(0, valueLineNum, name.c_str());
+                    u8x8.drawString(0, valueLineNum, typeConcat(">", effectName.c_str()).c_str());
                 } 
             }
             else if (selectedStateIndex == 1) // palette mode
             {
-                u8x8.drawString(0, valueLineNum, getCurrentEffectOrPaletteName(false).c_str());
+                String paletteName = getCurrentEffectOrPaletteName(false);
+                u8x8.drawString(0, valueLineNum, typeConcat(">", paletteName.c_str()).c_str());
             }
             else // brightness, speed, and intensity modes
             {
                 double value;
-
                 switch(selectedStateIndex)
                 {
                     case 2: // brightness
@@ -367,8 +380,8 @@ class RyanUsermod : public Usermod
                 if (value == NAN) return;
 
                 int percent = valueToPercent(value);
-                std::string concat = typeConcat(percent, "%");
-                u8x8.drawString(0, valueLineNum, concat.c_str());
+                std::string percentConcat = typeConcat(">", typeConcat(percent, "%"));
+                u8x8.drawString(0, valueLineNum, percentConcat.c_str());
             }
         }
 
