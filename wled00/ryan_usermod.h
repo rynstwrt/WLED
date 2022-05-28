@@ -32,7 +32,10 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define PALETTE_INDEX_START 6
 
 // Font macros
-#define STARTUP_FONT u8x8_font_chroma48medium8_r
+//#define STARTUP_FONT u8x8_font_chroma48medium8_r
+//#define STARTUP_FONT u8x8_font_torussansbold8_u  
+//#define STARTUP_FONT u8x8_font_victoriamedium8_u //TODO: try with wider line spacing
+#define STARTUP_FONT u8x8_font_victoriabold8_u 
 #define HEADER_FONT u8x8_font_8x13B_1x2_r
 #define VALUE_FONT u8x8_font_8x13_1x2_r
 
@@ -90,10 +93,21 @@ class RyanUsermod : public Usermod
             u8x8.setContrast(255);
             u8x8.setFont(STARTUP_FONT);
 
-            u8x8.drawString(0, 0, "Press & turn");
-            u8x8.drawString(0, 1, "to change modes.");
-            u8x8.drawString(0, 3, "Turn to change");
-            u8x8.drawString(0, 4, "values.");
+            u8x8.drawString(0, 0, "PRESS & TURN");
+            u8x8.drawString(0, 2, "TO CHANGE MODES.");
+
+            // Draws a thin horizontal line to split the start menu text in the middle.
+            uint8_t tiles[8] = { 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80 };  // 10000000 (binary) in hexadecimal is 0x80.
+            int numTiles = 7;
+            int tileStartIndex = 4;
+            for (int i = tileStartIndex; i < numTiles + tileStartIndex; ++i)
+            {
+                Serial.println(i);
+                u8x8.drawTile(i, 3, 1, tiles);
+            }
+
+            u8x8.drawString(0, 5, "TURN TO CHANGE");
+            u8x8.drawString(0, 7, "VALUES.");
         }
 
 
