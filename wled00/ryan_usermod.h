@@ -24,7 +24,7 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 
 // Effect macros
 #define NUM_EFFECTS 118
-#define EFFECT_INDEX_START 1
+#define EFFECT_INDEX_START 2
 #define MAX_EFFECT_NAME_PARTS 3  // The max potential number of space-separated words in a given effect name.
 
 // Palette macros
@@ -51,7 +51,7 @@ class RyanUsermod : public Usermod
         const String friendlyStateNames[numStates] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "INTENSITY" };
 
         int effectIndex = EFFECT_INDEX_START;
-        const int8_t bannedEffects[9] = { 0, 50, 62, 82, 83, 84, 96, 98, 116 };
+        const int8_t bannedEffects[10] = { 0, 1, 50, 62, 82, 83, 84, 96, 98, 116 };
 
         int paletteIndex = PALETTE_INDEX_START;
         const int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
@@ -85,13 +85,13 @@ class RyanUsermod : public Usermod
             lastLoopTime = millis();
             loopTime = lastLoopTime;
 
+            // Start with the matrix on black (off).
             CRGB fastled_col;
             col[0] = fastled_col.Black;
             col[1] = fastled_col.Black;
             col[2] = fastled_col.Black;
-            effectCurrent = effectIndex;
+            effectCurrent = 0; 
             effectPalette = paletteIndex;
-
             colorUpdated(CALL_MODE_NO_NOTIFY);
             updateInterfaces(CALL_MODE_NO_NOTIFY);
 
@@ -282,7 +282,6 @@ class RyanUsermod : public Usermod
             }
 
             int currentVal = 0;
-
             if (type == 0)
                 currentVal = bri;
             else if (type == 1)
@@ -408,6 +407,13 @@ class RyanUsermod : public Usermod
         {
             lastOledUpdate = millis();
 
+            if (effectCurrent != effectIndex) 
+            {
+                effectCurrent = effectIndex;
+                colorUpdated(CALL_MODE_NO_NOTIFY);
+                updateInterfaces(CALL_MODE_NO_NOTIFY);
+            }
+
             u8x8.setFont(HEADER_FONT);
             String headerName = friendlyStateNames[selectedStateIndex];
             u8x8.drawString(0, 0, headerName.c_str());
@@ -499,7 +505,8 @@ class RyanUsermod : public Usermod
 
         /**
          * Stores last selected effect, palette, brightness, 
-         * speed, and intensity to config (cfg.json).
+         * speed, and intensity to config (cfg.json). Called
+         * before setup().
          * 
          * @param root The config JSON root passed as a reference.
          */
