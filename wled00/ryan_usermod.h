@@ -32,12 +32,12 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define PALETTE_INDEX_START 6
 
 // Font macros
-//#define STARTUP_FONT u8x8_font_chroma48medium8_r
-//#define STARTUP_FONT u8x8_font_torussansbold8_u  
-//#define STARTUP_FONT u8x8_font_victoriamedium8_u //TODO: try with wider line spacing
 #define STARTUP_FONT u8x8_font_victoriabold8_u 
 #define HEADER_FONT u8x8_font_8x13B_1x2_r
 #define VALUE_FONT u8x8_font_8x13_1x2_r
+
+// Config macros
+#define CONFIG_SAVE_DELAY_MS 1000 * 15
 
 
 class RyanUsermod : public Usermod 
@@ -64,6 +64,13 @@ class RyanUsermod : public Usermod
         long lastOledUpdate = 0;
         bool oledTurnedOff = true;
 
+        unsigned long lastSaveTime;
+        int lastSavedEffectIndex;
+        int lastSavedPaletteIndex;
+        byte lastSavedBrightness;
+        byte lastSavedEffectSpeed;
+        byte lastSavedEffectIntensity;
+        
 
     public:
         /**
@@ -102,12 +109,102 @@ class RyanUsermod : public Usermod
             int tileStartIndex = 4;
             for (int i = tileStartIndex; i < numTiles + tileStartIndex; ++i)
             {
-                Serial.println(i);
                 u8x8.drawTile(i, 3, 1, tiles);
             }
 
             u8x8.drawString(0, 5, "TURN TO CHANGE");
             u8x8.drawString(0, 7, "VALUES.");
+        }
+
+
+        /**
+         * @brief Called continuously. For reading events, reading sensors, etc.
+         */
+        void loop()
+        {
+            if (millis() - lastLoopTime > LOOP_POLL_DELAY_MS) 
+            {
+                int encoderA = digitalRead(DT_PIN);
+                int encoderB = digitalRead(CLK_PIN);
+                buttonState = digitalRead(SW_PIN);
+
+                if ((!encoderA) && encoderAPrev)
+                {
+                    if (encoderB == HIGH && buttonState == LOW) // Rotating clockwise while pressed
+                    {
+                        onEncoderRotatedWhilePressed(true);
+                    }
+                    else if (encoderB == HIGH) // Rotating clockwise
+                    {
+                        if (selectedStateIndex == 0) // effect
+                            onEncoderRotatedQualitative(true, true);
+                        else if (selectedStateIndex == 1) // palette
+                            onEncoderRotatedQualitative(true, false);
+                        else if (selectedStateIndex == 2) // brightness
+                            onEncoderRotatedQuantitative(true, 0);
+                        else if (selectedStateIndex == 3) // speed
+                            onEncoderRotatedQuantitative(true, 1);
+                        else if (selectedStateIndex == 4) // intensity
+                            onEncoderRotatedQuantitative(true, 2);
+                    }
+                    else if (encoderB == LOW && buttonState == LOW) // Rotating counterclockwise while pressing.
+                    {
+                        onEncoderRotatedWhilePressed(false);
+                    }
+                    else if (encoderB == LOW) // Rotating counterclockwise.
+                    {
+                        if (selectedStateIndex == 0) // effect
+                            onEncoderRotatedQualitative(false, true);
+                        else if (selectedStateIndex == 1) // palette
+                            onEncoderRotatedQualitative(false, false);
+                        else if (selectedStateIndex == 2) // brightness
+                            onEncoderRotatedQuantitative(false, 0);
+                        else if (selectedStateIndex == 3) // speed
+                            onEncoderRotatedQuantitative(false, 1);
+                        else if (selectedStateIndex == 4) // intensity
+                            onEncoderRotatedQuantitative(false, 2);
+                    }
+
+                    u8x8.clear();
+                    updateOled();
+                }
+                else if (buttonState == LOW && oledTurnedOff) // Allow for button press down to wake OLED when asleep.
+                {
+                    u8x8.setPowerSave(0);
+                    oledTurnedOff = false;
+                    u8x8.clear();
+                    updateOled();
+                    return;
+                }
+                
+                if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
+                {
+                    u8x8.setPowerSave(1);
+                    oledTurnedOff = true;
+                }
+
+                encoderAPrev = encoderA;
+                lastLoopTime = millis();
+            }
+
+            // Save the current values to config if enough
+            // time has passed and the current values are different
+            // than the known saved values.
+            if (millis() - lastSaveTime > CONFIG_SAVE_DELAY_MS &&
+            (lastSavedEffectIndex != effectIndex ||
+            lastSavedPaletteIndex != paletteIndex ||
+            lastSavedBrightness != bri ||
+            lastSavedEffectSpeed != effectSpeed ||
+            lastSavedEffectIntensity != effectIntensity))
+            {
+                lastSaveTime = millis();
+                lastSavedEffectIndex = effectIndex;
+                lastSavedPaletteIndex = paletteIndex;
+                lastSavedBrightness = bri;
+                lastSavedEffectSpeed = effectSpeed;
+                lastSavedEffectIntensity = effectIntensity;
+                serializeConfig();
+            }
         }
 
 
@@ -401,73 +498,40 @@ class RyanUsermod : public Usermod
 
 
         /**
-         * @brief Called continuously. For reading events, reading sensors, etc.
+         * Stores last selected effect, palette, brightness, 
+         * speed, and intensity to config (cfg.json).
+         * 
+         * @param root The config JSON root passed as a reference.
          */
-        void loop()
+        void addToConfig(JsonObject &root)
         {
-            if (millis() - lastLoopTime > LOOP_POLL_DELAY_MS) 
-            {
-                int encoderA = digitalRead(DT_PIN);
-                int encoderB = digitalRead(CLK_PIN);
-                buttonState = digitalRead(SW_PIN);
+            JsonObject top = root.createNestedObject("ryanUsermod");
+            top["effectIndex"] = effectIndex;
+            top["paletteIndex"] = paletteIndex;
+            top["bri"] = bri;
+            top["effectSpeed"] = effectSpeed;
+            top["effectIntensity"] = effectIntensity;
+        }
 
-                if ((!encoderA) && encoderAPrev)
-                {
-                    if (encoderB == HIGH && buttonState == LOW) // Rotating clockwise while pressed
-                    {
-                        onEncoderRotatedWhilePressed(true);
-                    }
-                    else if (encoderB == HIGH) // Rotating clockwise
-                    {
-                        if (selectedStateIndex == 0) // effect
-                            onEncoderRotatedQualitative(true, true);
-                        else if (selectedStateIndex == 1) // palette
-                            onEncoderRotatedQualitative(true, false);
-                        else if (selectedStateIndex == 2) // brightness
-                            onEncoderRotatedQuantitative(true, 0);
-                        else if (selectedStateIndex == 3) // speed
-                            onEncoderRotatedQuantitative(true, 1);
-                        else if (selectedStateIndex == 4) // intensity
-                            onEncoderRotatedQuantitative(true, 2);
-                    }
-                    else if (encoderB == LOW && buttonState == LOW) // Rotating counterclockwise while pressing.
-                    {
-                        onEncoderRotatedWhilePressed(false);
-                    }
-                    else if (encoderB == LOW) // Rotating counterclockwise.
-                    {
-                        if (selectedStateIndex == 0) // effect
-                            onEncoderRotatedQualitative(false, true);
-                        else if (selectedStateIndex == 1) // palette
-                            onEncoderRotatedQualitative(false, false);
-                        else if (selectedStateIndex == 2) // brightness
-                            onEncoderRotatedQuantitative(false, 0);
-                        else if (selectedStateIndex == 3) // speed
-                            onEncoderRotatedQuantitative(false, 1);
-                        else if (selectedStateIndex == 4) // intensity
-                            onEncoderRotatedQuantitative(false, 2);
-                    }
 
-                    u8x8.clear();
-                    updateOled();
-                }
-                else if (buttonState == LOW && oledTurnedOff) // Allow for button press down to wake OLED when asleep.
-                {
-                    u8x8.setPowerSave(0);
-                    oledTurnedOff = false;
-                    u8x8.clear();
-                    updateOled();
-                    return;
-                }
-                
-                if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
-                {
-                    u8x8.setPowerSave(1);
-                    oledTurnedOff = true;
-                }
+        /**
+         * @brief Assigns relevant variables to their stored values in the config (cfg.json).
+         * 
+         * @param root The config JSON root passed as a reference.
+         * @return true If the config values were complete.
+         * @return false If defaults should be used.
+         */
+        bool readFromConfig(JsonObject &root)
+        {
+            JsonObject top = root["ryanUsermod"];
+            bool configComplete = !top.isNull();
 
-                encoderAPrev = encoderA;
-                lastLoopTime = millis();
-            }
+            configComplete &= getJsonValue(top["effectIndex"], effectIndex);
+            configComplete &= getJsonValue(top["paletteIndex"], paletteIndex);
+            configComplete &= getJsonValue(top["bri"], bri);
+            configComplete &= getJsonValue(top["effectSpeed"], effectSpeed);
+            configComplete &= getJsonValue(top["effectIntensity"], effectIntensity);
+
+            return configComplete;
         }
 };
