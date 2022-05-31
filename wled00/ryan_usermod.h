@@ -20,7 +20,7 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define SCROLL_STEP 5
 
 // Mode macros
-#define NUM_STATES 6
+#define NUM_STATES 5
 
 // Effect macros
 #define NUM_EFFECTS 118
@@ -37,7 +37,7 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define VALUE_FONT u8x8_font_8x13_1x2_r
 
 // Config macros
-#define SAVE_CONFIG_BUTTON_PRESS_DURATION 1000 * 3
+#define CONFIG_SAVE_DELAY_MS 1000 * 15
 
 
 class RyanUsermod : public Usermod 
@@ -46,8 +46,9 @@ class RyanUsermod : public Usermod
         unsigned long lastLoopTime;
         unsigned long loopTime;
 
+        static const int numStates = 5;
         int selectedStateIndex = 0;
-        const String friendlyStateNames[NUM_STATES] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "INTENSITY", "SAVE CONFIG?" };
+        const String friendlyStateNames[numStates] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "INTENSITY" };
 
         int effectIndex = EFFECT_INDEX_START;
         const int8_t bannedEffects[10] = { 0, 1, 50, 62, 82, 83, 84, 96, 98, 116 };
@@ -60,12 +61,15 @@ class RyanUsermod : public Usermod
 
         unsigned char encoderAPrev = 0;
 
-        unsigned long lastOledUpdate = 0;
+        long lastOledUpdate = 0;
         bool oledTurnedOff = true;
 
-        bool hasLiftedUpOnSaveScreen = false;
-        unsigned long lastSaveConfigButtonPressTime = 0;
-        bool showSaveConfirmation = false;
+        unsigned long lastSaveTime;
+        int lastSavedEffectIndex;
+        int lastSavedPaletteIndex;
+        byte lastSavedBrightness;
+        byte lastSavedEffectSpeed;
+        byte lastSavedEffectIntensity;
         
 
     public:
@@ -133,9 +137,9 @@ class RyanUsermod : public Usermod
                     else if (encoderB == HIGH) // Rotating clockwise
                     {
                         if (selectedStateIndex == 0) // effect
-                            onEncoderRotatedQualitative(true, 0);
+                            onEncoderRotatedQualitative(true, true);
                         else if (selectedStateIndex == 1) // palette
-                            onEncoderRotatedQualitative(true, 1);
+                            onEncoderRotatedQualitative(true, false);
                         else if (selectedStateIndex == 2) // brightness
                             onEncoderRotatedQuantitative(true, 0);
                         else if (selectedStateIndex == 3) // speed
@@ -150,9 +154,9 @@ class RyanUsermod : public Usermod
                     else if (encoderB == LOW) // Rotating counterclockwise.
                     {
                         if (selectedStateIndex == 0) // effect
-                            onEncoderRotatedQualitative(false, 0);
+                            onEncoderRotatedQualitative(false, true);
                         else if (selectedStateIndex == 1) // palette
-                            onEncoderRotatedQualitative(false, 1);
+                            onEncoderRotatedQualitative(false, false);
                         else if (selectedStateIndex == 2) // brightness
                             onEncoderRotatedQuantitative(false, 0);
                         else if (selectedStateIndex == 3) // speed
@@ -172,37 +176,8 @@ class RyanUsermod : public Usermod
                     updateOled();
                     return;
                 }
-                else if (buttonState == HIGH && selectedStateIndex == 5)
-                {
-                    hasLiftedUpOnSaveScreen = true;
-                }
-                else if (buttonState == LOW && selectedStateIndex == 5 && hasLiftedUpOnSaveScreen)
-                {
-                    if (lastSaveConfigButtonPressTime == 0)
-                    {
-                        // Serial.println("writing first button press");
-                        lastSaveConfigButtonPressTime = millis();
-                    }
-                        
-                    if (millis() - lastSaveConfigButtonPressTime > SAVE_CONFIG_BUTTON_PRESS_DURATION)
-                    {
-                        Serial.println("saving config");
-                        serializeConfig();
-                        // Serial.println("RESET LAST SAVE BUTTON TIME");
-                        lastSaveConfigButtonPressTime = 0;
-                        showSaveConfirmation = true;
-                        updateOled();
-                        
-                    }
-                }
-                else if ((buttonState == LOW && selectedStateIndex != 5) || buttonState == HIGH)
-                {
-                    // Serial.println("RESET LAST SAVE BUTTON TIME");
-                    lastSaveConfigButtonPressTime = 0;
-                }
-
-
-                if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000) // Make OLED sleep during inactivity.
+                
+                if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
                 {
                     u8x8.setPowerSave(1);
                     oledTurnedOff = true;
@@ -211,18 +186,36 @@ class RyanUsermod : public Usermod
                 encoderAPrev = encoderA;
                 lastLoopTime = millis();
             }
+
+            // Save the current values to config if enough
+            // time has passed and the current values are different
+            // than the known saved values.
+            if (millis() - lastSaveTime > CONFIG_SAVE_DELAY_MS &&
+            (lastSavedEffectIndex != effectIndex ||
+            lastSavedPaletteIndex != paletteIndex ||
+            lastSavedBrightness != bri ||
+            lastSavedEffectSpeed != effectSpeed ||
+            lastSavedEffectIntensity != effectIntensity))
+            {
+                lastSaveTime = millis();
+                lastSavedEffectIndex = effectIndex;
+                lastSavedPaletteIndex = paletteIndex;
+                lastSavedBrightness = bri;
+                lastSavedEffectSpeed = effectSpeed;
+                lastSavedEffectIntensity = effectIntensity;
+                serializeConfig();
+            }
         }
 
 
         /**
          * Called when the rotary encoder is rotated on a mode 
-         * that doesn't use numbers, such as the effect, palette, 
-         * and "save defaults" modes.
+         * that doesn't use numbers, such as the effect and palette modes.
          * 
          * @param direction True if rotating clockwise, false if rotating counterclockwise.
-         * @param type 0 -> effect    1 -> palette    2 -> save defaults
+         * @param type True if effect, false if palette.
          */
-        void onEncoderRotatedQualitative(bool direction, int type)
+        void onEncoderRotatedQualitative(bool direction, bool type)
         {
             if (oledTurnedOff)
             {
@@ -231,12 +224,12 @@ class RyanUsermod : public Usermod
                 return;
             }
 
-            int relevantIndex = !type ? effectIndex : paletteIndex;
+            int relevantIndex = type ? effectIndex : paletteIndex;
             direction ? ++relevantIndex : --relevantIndex;
 
-            int numBanned = !type ? (sizeof(bannedEffects) / sizeof(*bannedEffects)) : (sizeof(bannedPalettes) / sizeof(*bannedPalettes));
+            int numBanned = type ? (sizeof(bannedEffects) / sizeof(*bannedEffects)) : (sizeof(bannedPalettes) / sizeof(*bannedPalettes));
 
-            if (!type)
+            if (type)
             {
                 while (std::find(bannedEffects, bannedEffects + numBanned, relevantIndex) != bannedEffects + numBanned)
                     direction ? ++relevantIndex : --relevantIndex;
@@ -247,15 +240,15 @@ class RyanUsermod : public Usermod
                     direction ? ++relevantIndex : --relevantIndex;
             }
 
-            int numIndexes = !type ? NUM_EFFECTS : NUM_PALETTES;
-            int startIndex = !type ? EFFECT_INDEX_START : PALETTE_INDEX_START;
+            int numIndexes = type ? NUM_EFFECTS : NUM_PALETTES;
+            int startIndex = type ? EFFECT_INDEX_START : PALETTE_INDEX_START;
 
             if (direction && relevantIndex >= numIndexes)
                 relevantIndex = startIndex;
             else if (!direction && relevantIndex < 0)
                 relevantIndex = numIndexes - 1;
                 
-            if (!type)
+            if (type)
             {
                 effectIndex = relevantIndex;
                 effectCurrent = effectIndex;
@@ -336,7 +329,7 @@ class RyanUsermod : public Usermod
 
             direction ? ++selectedStateIndex : --selectedStateIndex;
 
-            if (selectedStateIndex >= NUM_STATES)
+            if (selectedStateIndex >= numStates)
                 selectedStateIndex = 0;
             else if (selectedStateIndex < 0)
                 selectedStateIndex = NUM_STATES - 1;
@@ -482,20 +475,6 @@ class RyanUsermod : public Usermod
             {
                 String paletteName = getCurrentEffectOrPaletteName(false);
                 u8x8.drawString(0, valueLineNum, typeConcat(">", paletteName.c_str()).c_str());
-            }
-            else if (selectedStateIndex == 5) // save defaults mode
-            {
-                if (showSaveConfirmation)
-                {
-                    u8x8.drawString(0, valueLineNum, "Saved config");
-                    u8x8.drawString(0, valueLineNum + 2, "as default!");
-                }
-                else
-                {
-                    std::string firstLineText = typeConcat("Hold for ", SAVE_CONFIG_BUTTON_PRESS_DURATION / 1000) + " to";
-                    u8x8.drawString(0, valueLineNum, firstLineText.c_str());
-                    u8x8.drawString(0, valueLineNum + 2, "save as default.");
-                }
             }
             else // brightness, speed, and intensity modes
             {
