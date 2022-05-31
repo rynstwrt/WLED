@@ -17,7 +17,6 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define CLK_PIN 14  // D6
 #define DT_PIN 12  // D5
 #define SW_PIN 13  //D7
-#define SCROLL_STEP 5
 
 // Mode macros
 #define NUM_STATES 5
@@ -31,13 +30,13 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define NUM_PALETTES 71
 #define PALETTE_INDEX_START 6
 
+// Intensity macros
+#define INTENSITY_SCROLL_STEP 5
+
 // Font macros
 #define STARTUP_FONT u8x8_font_victoriabold8_u 
 #define HEADER_FONT u8x8_font_8x13B_1x2_r
 #define VALUE_FONT u8x8_font_8x13_1x2_r
-
-// Config macros
-#define CONFIG_SAVE_DELAY_MS 1000 * 15
 
 
 class RyanUsermod : public Usermod 
@@ -55,6 +54,10 @@ class RyanUsermod : public Usermod
 
         int paletteIndex = PALETTE_INDEX_START;
         const int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
+
+        int brightnessIndex = 5;
+        int speedIndex = 5;
+        int intensityIndex = 5;
         
         unsigned char buttonState = HIGH;
         unsigned char prevButtonState = HIGH;
@@ -63,13 +66,6 @@ class RyanUsermod : public Usermod
 
         long lastOledUpdate = 0;
         bool oledTurnedOff = true;
-
-        unsigned long lastSaveTime;
-        int lastSavedEffectIndex;
-        int lastSavedPaletteIndex;
-        byte lastSavedBrightness;
-        byte lastSavedEffectSpeed;
-        byte lastSavedEffectIntensity;
         
 
     public:
@@ -186,25 +182,6 @@ class RyanUsermod : public Usermod
                 encoderAPrev = encoderA;
                 lastLoopTime = millis();
             }
-
-            // Save the current values to config if enough
-            // time has passed and the current values are different
-            // than the known saved values.
-            if (millis() - lastSaveTime > CONFIG_SAVE_DELAY_MS &&
-            (lastSavedEffectIndex != effectIndex ||
-            lastSavedPaletteIndex != paletteIndex ||
-            lastSavedBrightness != bri ||
-            lastSavedEffectSpeed != effectSpeed ||
-            lastSavedEffectIntensity != effectIntensity))
-            {
-                lastSaveTime = millis();
-                lastSavedEffectIndex = effectIndex;
-                lastSavedPaletteIndex = paletteIndex;
-                lastSavedBrightness = bri;
-                lastSavedEffectSpeed = effectSpeed;
-                lastSavedEffectIntensity = effectIntensity;
-                serializeConfig();
-            }
         }
 
 
@@ -281,35 +258,36 @@ class RyanUsermod : public Usermod
                 return;
             }
 
-            int currentVal = 0;
-            if (type == 0)
-                currentVal = bri;
-            else if (type == 1)
-                currentVal = effectSpeed;
-            else if (type == 2)
-                currentVal = effectIntensity;
+            if (type == 0 || type == 1) // brightness and speed
+            {
+                int currentVal = (type == 0) ? brightnessIndex : speedIndex;
+                currentVal += direction ? 1 : -1;
 
-            currentVal = (direction) ? currentVal + SCROLL_STEP : currentVal - SCROLL_STEP;
+                if (direction && currentVal > 10)
+                    currentVal = 10;
 
-            if (direction && currentVal > 255)
-                currentVal = 255;
+                if (!direction && currentVal < 0)
+                    currentVal = 0;
 
-            if (!direction && currentVal < 0)
-                currentVal = 0;
+                if (type == 0)
+                {
+                    brightnessIndex = currentVal;
+                    bri = quantitativeIndexToRange(currentVal);
+                    stateUpdated(CALL_MODE_NO_NOTIFY);
+                }
+                else
+                {
+                    speedIndex = currentVal;
+                    effectSpeed = quantitativeIndexToRange(currentVal);
+                    colorUpdated(CALL_MODE_NO_NOTIFY);
+                }
 
-            if (type == 0)
-                bri = currentVal;
-            else if (type == 1)
-                effectSpeed = currentVal;
-            else if (type == 2)
-                effectIntensity = currentVal;
-
-            if (type == 0)
-                stateUpdated(CALL_MODE_NO_NOTIFY);
-            else
-                colorUpdated(CALL_MODE_NO_NOTIFY);
-
-            updateInterfaces(CALL_MODE_NO_NOTIFY);
+                updateInterfaces(CALL_MODE_NO_NOTIFY);
+            }
+            else if (type == 2) // intensity
+            {
+                // TODO: handle intensity
+            }            
         }
 
 
@@ -364,22 +342,6 @@ class RyanUsermod : public Usermod
 
 
         /**
-         * @brief Converts a value to a percentage.
-         * 
-         * @param value The value in the range of [0, 255] to convert.
-         * @return int The calculated percentage.
-         */
-        int valueToPercent(double value)
-        {
-            double val = value;
-            val /= 255;
-            val *= 100;
-            val = floor(val);
-            return (int) val;
-        }
-
-
-        /**
          * Concat 2 datatypes (mostly "int/const char*" and "std::string/const char*" pairs) 
          * into a single std::string.
          * 
@@ -396,6 +358,18 @@ class RyanUsermod : public Usermod
             oss << a;
             oss << b;
             return oss.str();
+        }
+
+
+        /**
+         * @brief Convert a value in [0, 10] to be a value in the range of [0, 255].
+         * 
+         * @param index The brightness, speed, or intensity index.
+         * @return int The index value scaled to be in [0, 255].
+         */
+        int quantitativeIndexToRange(int index)
+        {
+            return (index * 255) / (10) + 0;
         }
 
 
@@ -476,69 +450,54 @@ class RyanUsermod : public Usermod
                 String paletteName = getCurrentEffectOrPaletteName(false);
                 u8x8.drawString(0, valueLineNum, typeConcat(">", paletteName.c_str()).c_str());
             }
-            else // brightness, speed, and intensity modes
+            else if (selectedStateIndex == 2 || selectedStateIndex == 3) // brightness and speed modes
             {
-                double value;
-                switch(selectedStateIndex)
-                {
-                    case 2: // brightness
-                        value = bri;
-                        break;
-                    case 3: // speed
-                        value = effectSpeed;
-                        break;
-                    case 4: // intensity
-                        value = effectIntensity;
-                        break;
-                    default:
-                        value = NAN;
-                }
-
-                if (value == NAN) return;
-
-                int percent = valueToPercent(value);
-                std::string percentConcat = typeConcat(">", typeConcat(percent, "%"));
-                u8x8.drawString(0, valueLineNum, percentConcat.c_str());
+                int value = (selectedStateIndex == 2) ? brightnessIndex : speedIndex;
+                u8x8.drawString(0, valueLineNum, typeConcat(value, "/10").c_str());
+            }
+            else if (selectedStateIndex == 4) // intensity mode
+            {
+                // TODO: handle intensity mode.
             }
         }
 
 
-        /**
-         * Stores last selected effect, palette, brightness, 
-         * speed, and intensity to config (cfg.json). Called
-         * before setup().
-         * 
-         * @param root The config JSON root passed as a reference.
-         */
-        void addToConfig(JsonObject &root)
-        {
-            JsonObject top = root.createNestedObject("ryanUsermod");
-            top["effectIndex"] = effectIndex;
-            top["paletteIndex"] = paletteIndex;
-            top["bri"] = bri;
-            top["effectSpeed"] = effectSpeed;
-            top["effectIntensity"] = effectIntensity;
-        }
+        // /**
+        //  * Stores last selected effect, palette, brightness, 
+        //  * speed, and intensity to config (cfg.json). Called
+        //  * before setup().
+        //  * 
+        //  * @param root The config JSON root passed as a reference.
+        //  */
+        // void addToConfig(JsonObject &root)
+        // {
+        //     JsonObject top = root.createNestedObject("ryanUsermod");
+        //     top["effectIndex"] = effectIndex;
+        //     top["paletteIndex"] = paletteIndex;
+        //     top["bri"] = bri;
+        //     top["effectSpeed"] = effectSpeed;
+        //     top["effectIntensity"] = effectIntensity;
+        // }
 
 
-        /**
-         * @brief Assigns relevant variables to their stored values in the config (cfg.json).
-         * 
-         * @param root The config JSON root passed as a reference.
-         * @return true If the config values were complete.
-         * @return false If defaults should be used.
-         */
-        bool readFromConfig(JsonObject &root)
-        {
-            JsonObject top = root["ryanUsermod"];
-            bool configComplete = !top.isNull();
+        // /**
+        //  * @brief Assigns relevant variables to their stored values in the config (cfg.json).
+        //  * 
+        //  * @param root The config JSON root passed as a reference.
+        //  * @return true If the config values were complete.
+        //  * @return false If defaults should be used.
+        //  */
+        // bool readFromConfig(JsonObject &root)
+        // {
+        //     JsonObject top = root["ryanUsermod"];
+        //     bool configComplete = !top.isNull();
 
-            configComplete &= getJsonValue(top["effectIndex"], effectIndex);
-            configComplete &= getJsonValue(top["paletteIndex"], paletteIndex);
-            configComplete &= getJsonValue(top["bri"], bri);
-            configComplete &= getJsonValue(top["effectSpeed"], effectSpeed);
-            configComplete &= getJsonValue(top["effectIntensity"], effectIntensity);
+        //     configComplete &= getJsonValue(top["effectIndex"], effectIndex);
+        //     configComplete &= getJsonValue(top["paletteIndex"], paletteIndex);
+        //     configComplete &= getJsonValue(top["bri"], bri);
+        //     configComplete &= getJsonValue(top["effectSpeed"], effectSpeed);
+        //     configComplete &= getJsonValue(top["effectIntensity"], effectIntensity);
 
-            return configComplete;
-        }
+        //     return configComplete;
+        // }
 };
