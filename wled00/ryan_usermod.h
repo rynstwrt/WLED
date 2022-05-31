@@ -17,7 +17,6 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define CLK_PIN 14  // D6
 #define DT_PIN 12  // D5
 #define SW_PIN 13  //D7
-#define SCROLL_STEP 5
 
 // Mode macros
 #define NUM_STATES 6
@@ -54,10 +53,12 @@ class RyanUsermod : public Usermod
 
         int paletteIndex = PALETTE_INDEX_START;
         const int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
+
+        int brightnessSelected = 5;
+        int speedSelected = 5;
+        int intensitySelected = 5;
         
         unsigned char buttonState = HIGH;
-        unsigned char prevButtonState = HIGH;
-
         unsigned char encoderAPrev = 0;
 
         unsigned long lastOledUpdate = 0;
@@ -88,6 +89,9 @@ class RyanUsermod : public Usermod
             col[2] = fastled_col.Black;
             effectCurrent = 0; 
             effectPalette = paletteIndex;
+            bri = convertSelectedNumberToInt(brightnessSelected);
+            effectSpeed = convertSelectedNumberToInt(speedSelected);
+            effectIntensity = convertSelectedNumberToInt(intensitySelected);
             colorUpdated(CALL_MODE_NO_NOTIFY);
             updateInterfaces(CALL_MODE_NO_NOTIFY);
 
@@ -290,27 +294,33 @@ class RyanUsermod : public Usermod
 
             int currentVal = 0;
             if (type == 0)
-                currentVal = bri;
+                currentVal = brightnessSelected;
             else if (type == 1)
-                currentVal = effectSpeed;
+                currentVal = speedSelected;
             else if (type == 2)
-                currentVal = effectIntensity;
+                currentVal = intensitySelected;
 
-            currentVal = (direction) ? currentVal + SCROLL_STEP : currentVal - SCROLL_STEP;
+            if ((direction && currentVal >= 10) || (!direction && currentVal <= 0))
+                return;
 
-            if (direction && currentVal > 255)
-                currentVal = 255;
-
-            if (!direction && currentVal < 0)
-                currentVal = 0;
+            direction ? ++currentVal : --currentVal;
 
             if (type == 0)
-                bri = currentVal;
+            {
+                brightnessSelected = currentVal;
+                bri = convertSelectedNumberToInt(brightnessSelected);
+            }
             else if (type == 1)
-                effectSpeed = currentVal;
+            {
+                speedSelected = currentVal;
+                effectSpeed = convertSelectedNumberToInt(speedSelected);
+            }
             else if (type == 2)
-                effectIntensity = currentVal;
-
+            {
+                intensitySelected = currentVal;
+                effectIntensity = convertSelectedNumberToInt(intensitySelected);
+            }
+                
             if (type == 0)
                 stateUpdated(CALL_MODE_NO_NOTIFY);
             else
@@ -344,6 +354,21 @@ class RyanUsermod : public Usermod
 
 
         /**
+         * @brief Convert a selected number (in range [0, 10]) to a value in the range [0, 255].
+         * 
+         * @param selectedNumber The number in the range [0, 10].
+         * @return int The value converted to the range [0, 255].
+         */
+        int convertSelectedNumberToInt(int selectedNumber)
+        {
+            int a = 255 / 10 * selectedNumber;
+            Serial.print("converted to ");
+            Serial.println(a);
+            return a;
+        }
+
+
+        /**
          * @brief Get the Current Effect Or Palette Name object
          * 
          * @param type True when effect, false when palette.
@@ -367,22 +392,6 @@ class RyanUsermod : public Usermod
             }
 
             return lineBuffer;
-        }
-
-
-        /**
-         * @brief Converts a value to a percentage.
-         * 
-         * @param value The value in the range of [0, 255] to convert.
-         * @return int The calculated percentage.
-         */
-        int valueToPercent(double value)
-        {
-            double val = value;
-            val /= 255;
-            val *= 100;
-            val = floor(val);
-            return (int) val;
         }
 
 
@@ -414,7 +423,7 @@ class RyanUsermod : public Usermod
         {
             lastOledUpdate = millis();
 
-            if (effectCurrent != effectIndex) 
+            if (effectCurrent != effectIndex) // If on black when first booted up, correct once OLED is updated.
             {
                 effectCurrent = effectIndex;
                 colorUpdated(CALL_MODE_NO_NOTIFY);
@@ -499,35 +508,34 @@ class RyanUsermod : public Usermod
             }
             else // brightness, speed, and intensity modes
             {
-                double value;
+                int value;
                 switch(selectedStateIndex)
                 {
                     case 2: // brightness
-                        value = bri;
+                        value = brightnessSelected;
                         break;
                     case 3: // speed
-                        value = effectSpeed;
+                        value = speedSelected;
                         break;
                     case 4: // intensity
-                        value = effectIntensity;
+                        value = intensitySelected;
                         break;
                     default:
                         value = NAN;
                 }
 
+                Serial.println("before value check");
+
                 if (value == NAN) return;
 
-                int percent = valueToPercent(value);
-                std::string percentConcat = typeConcat(">", typeConcat(percent, "%"));
-                u8x8.drawString(0, valueLineNum, percentConcat.c_str());
+                Serial.println("value exists");
+                u8x8.drawString(0, valueLineNum, typeConcat(value, "/10").c_str());
             }
         }
 
 
         /**
-         * Stores last selected effect, palette, brightness, 
-         * speed, and intensity to config (cfg.json). Called
-         * before setup().
+         * @brief Stores last selected effect, palette, brightness, speed, and intensity to config (cfg.json).
          * 
          * @param root The config JSON root passed as a reference.
          */
@@ -536,14 +544,14 @@ class RyanUsermod : public Usermod
             JsonObject top = root.createNestedObject("ryanUsermod");
             top["effectIndex"] = effectIndex;
             top["paletteIndex"] = paletteIndex;
-            top["bri"] = bri;
-            top["effectSpeed"] = effectSpeed;
-            top["effectIntensity"] = effectIntensity;
+            top["brightnessSelected"] = brightnessSelected;
+            top["speedSelected"] = speedSelected;
+            top["intensitySelected"] = intensitySelected;
         }
 
 
         /**
-         * @brief Assigns relevant variables to their stored values in the config (cfg.json).
+         * @brief Assigns relevant variables to their stored values in the config (cfg.json). Called before setup().
          * 
          * @param root The config JSON root passed as a reference.
          * @return true If the config values were complete.
@@ -556,9 +564,9 @@ class RyanUsermod : public Usermod
 
             configComplete &= getJsonValue(top["effectIndex"], effectIndex);
             configComplete &= getJsonValue(top["paletteIndex"], paletteIndex);
-            configComplete &= getJsonValue(top["bri"], bri);
-            configComplete &= getJsonValue(top["effectSpeed"], effectSpeed);
-            configComplete &= getJsonValue(top["effectIntensity"], effectIntensity);
+            configComplete &= getJsonValue(top["brightnessSelected"], brightnessSelected);
+            configComplete &= getJsonValue(top["speedSelected"], speedSelected);
+            configComplete &= getJsonValue(top["intensitySelected"], intensitySelected);
 
             return configComplete;
         }
