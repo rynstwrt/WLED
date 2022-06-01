@@ -36,6 +36,7 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 // Screen macros
 #define NUM_SCREENS 3
 #define TOTAL_NUM_OPTIONS 6
+#define INTENSITY_SCROLL_STEP 5
 
 
 class RyanUsermod : public Usermod 
@@ -45,7 +46,7 @@ class RyanUsermod : public Usermod
         unsigned long loopTime;
 
         int effectIndex = EFFECT_INDEX_START;
-        const int8_t bannedEffects[11] = { 0, 1, 32, 50, 62, 82, 83, 84, 96, 98, 116 };
+        const int8_t bannedEffects[12] = { 0, 1, 32, 50, 58, 62, 82, 83, 84, 96, 98, 116 };
 
         int paletteIndex = PALETTE_INDEX_START;
         const int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
@@ -63,7 +64,7 @@ class RyanUsermod : public Usermod
 
         int brightnessIndex = 5;
         int speedIndex = 5;
-        int intensityIndex = 5;
+        int intensityPercent = 50;
         
 
     public:
@@ -213,14 +214,14 @@ class RyanUsermod : public Usermod
                         }
                         else if (optionIndex == 4) // Intensity
                         {
-                            clockwise ? ++intensityIndex : --intensityIndex;
+                            intensityPercent += clockwise ? INTENSITY_SCROLL_STEP : -INTENSITY_SCROLL_STEP;
 
-                            if (intensityIndex > 10)
-                                intensityIndex = 10;
-                            else if (intensityIndex < 0)
-                                intensityIndex = 0;
+                            if (intensityPercent > 100)
+                                intensityPercent = 100;
+                            else if (intensityPercent < 0)
+                                intensityPercent = 0;
 
-                            effectIntensity = quantitativeIndexToRange(intensityIndex);
+                            effectIntensity = percentToValue(intensityPercent);
                             colorUpdated(CALL_MODE_NO_NOTIFY);
                         }
 
@@ -323,12 +324,12 @@ class RyanUsermod : public Usermod
                 u8x8.drawString(0, 3, typeConcat(speedLabel.c_str(), typeConcat(speedIndex, "/10").c_str()).c_str());
                 u8x8.setInverseFont(0);
 
-                std::string intensityLabel = " INTSTY: ";
+                std::string intensityLabel = " OPTION: ";
                 if (optionIndex == 4)
-                    intensityLabel = ">INTSTY: ";
+                    intensityLabel = ">OPTION: ";
                 if (optionIndex == 4 && optionSelected)
                     u8x8.setInverseFont(1);
-                u8x8.drawString(0, 5, typeConcat(intensityLabel.c_str(), typeConcat(intensityIndex, "/10").c_str()).c_str());
+                u8x8.drawString(0, 5, typeConcat(intensityLabel.c_str(), typeConcat(intensityPercent, "%").c_str()).c_str());
                 u8x8.setInverseFont(0);
             }
             else if (screenIndex == 2) // Save default screen.
@@ -397,4 +398,29 @@ class RyanUsermod : public Usermod
         {
             return (index * 255) / (10) + 0;
         }
+
+
+        /**
+         * @brief Convert a percent to a value in the range of [0, 255].
+         * 
+         * @param percent The percent to convert into a value.
+         * @return int The converted value.
+         */
+        int percentToValue(int percent)
+        {
+            return floor(255 * (percent / 100.0));
+        }
+
+
+        // /**
+        //  * @brief Convert a value in the range of [0, 255] to a percentage.
+        //  * 
+        //  * @param value The value to convert to a percentage.
+        //  * @return std::string The calculated value formatted to X% notation.
+        //  */
+        // std::string quantitativeToPercentString(int value)
+        // {
+        //     int calculated = (value * 100) / 255;
+        //     return typeConcat(calculated, "%");
+        // }
 };
