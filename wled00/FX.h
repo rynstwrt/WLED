@@ -933,7 +933,7 @@ const char JSON_mode_names[] PROGMEM = R"=====([
 "Two Dots","Fairy Twinkle","Dual Running","Halloween","Chase 3","Tri Wipe","Tri Fade","Lightning","ICU","Multi Comet",
 "Dual Scanner","Stream 2","Oscillate","Pride","Juggle","Palette","Fire","Color Waves","Back & Forth","Fill Noise",
 "Noise 1","Noise 2","Noise 3","Noise 4","Color Twinkles","Lake","Meteor","Meteor Smooth","Railway","Ripple",
-"Twinkle Fox","Twinkle Cat","Halloween Eyes","Solid Pattern","Solid Pattern Tri","Spots","Spots Fade","Glitter","Candle","Fireworks Starburst",
+"Twinkle Fox","Twinkle Cat","Halloween Eyes","Solid Pattern","Solid Pattern Tri","Spots","Spots Fade","Glitter","Candle","Fancy Fireworks",
 "Fireworks 1D","Bouncing Balls","Sinelon","Dual Sinelon","Rainbow Sinelon","Popcorn","Drip","Plasma","Percent","Ripple Rainbow",
 "Heartbeat","Pacifica","Multi Candle", "Solid Glitter","Sunrise","Phased","Twinkle Up","Palette Noise", "Sine","Phased Noise",
 "Flow","Chunchun","Dancing Shadows","Washing Machine","Candy Cane","Blends","TV Simulator","Dynamic Smooth"

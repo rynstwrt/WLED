@@ -11,15 +11,14 @@
 // OLED macros
 #define OLED_PIN_SCL 5  // D1
 #define OLED_PIN_SDA 4  // D2
+#define OLED_SLEEP_AFTER_MS 5 * 60 * 1000
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA);
 
 // Rotary encoder macros
 #define CLK_PIN 14  // D6
 #define DT_PIN 12  // D5
 #define SW_PIN 13  //D7
-
-// Mode macros
-#define NUM_STATES 5
+#define BUTTON_PRESS_DEBOUNCE_MS 1000 / 4
 
 // Effect macros
 #define NUM_EFFECTS 118
@@ -30,13 +29,13 @@ U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE, OLED_PIN_SCL, OLED_PIN_SDA
 #define NUM_PALETTES 71
 #define PALETTE_INDEX_START 6
 
-// Intensity macros
-#define INTENSITY_SCROLL_STEP 5
-
 // Font macros
 #define STARTUP_FONT u8x8_font_victoriabold8_u 
-#define HEADER_FONT u8x8_font_8x13B_1x2_r
-#define VALUE_FONT u8x8_font_8x13_1x2_r
+#define GENERAL_FONT u8x8_font_victoriabold8_r
+
+// Screen macros
+#define NUM_SCREENS 3
+#define TOTAL_NUM_OPTIONS 6
 
 
 class RyanUsermod : public Usermod 
@@ -45,27 +44,26 @@ class RyanUsermod : public Usermod
         unsigned long lastLoopTime;
         unsigned long loopTime;
 
-        static const int numStates = 5;
-        int selectedStateIndex = 0;
-        const String friendlyStateNames[numStates] = { "EFFECT", "PALETTE", "BRIGHTNESS", "SPEED", "INTENSITY" };
-
         int effectIndex = EFFECT_INDEX_START;
-        const int8_t bannedEffects[10] = { 0, 1, 50, 62, 82, 83, 84, 96, 98, 116 };
+        const int8_t bannedEffects[11] = { 0, 1, 32, 50, 62, 82, 83, 84, 96, 98, 116 };
 
         int paletteIndex = PALETTE_INDEX_START;
         const int8_t bannedPalettes[6] = { 0, 1, 2, 3, 4, 5 };
+        
+        unsigned char encoderAPrev = 0;
+        unsigned char buttonState = HIGH;
+        unsigned long lastButtonPressTime = 0;
+
+        long lastOledUpdate = 0;
+        bool oledTurnedOff = true;
+
+        const int8_t numOptionsPerScreen[3] = { 2, 3, 1 };
+        bool optionSelected = false;
+        int optionIndex = 0;
 
         int brightnessIndex = 5;
         int speedIndex = 5;
         int intensityIndex = 5;
-        
-        unsigned char buttonState = HIGH;
-        unsigned char prevButtonState = HIGH;
-
-        unsigned char encoderAPrev = 0;
-
-        long lastOledUpdate = 0;
-        bool oledTurnedOff = true;
         
 
     public:
@@ -96,20 +94,19 @@ class RyanUsermod : public Usermod
             u8x8.setContrast(255);
             u8x8.setFont(STARTUP_FONT);
 
-            u8x8.drawString(0, 0, "PRESS & TURN");
-            u8x8.drawString(0, 2, "TO CHANGE MODES.");
-
-            // Draws a thin horizontal line to split the start menu text in the middle.
-            uint8_t tiles[8] = { 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80 };  // 10000000 (binary) in hexadecimal is 0x80.
-            int numTiles = 7;
-            int tileStartIndex = 4;
-            for (int i = tileStartIndex; i < numTiles + tileStartIndex; ++i)
+            std::string startupHeader = "LED MATRIX";
+            u8x8.drawString(0, 0, startupHeader.c_str());
+            
+            uint8_t tiles[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
+            int startupHeaderLength = startupHeader.length();
+            for (int i = 0; i < startupHeaderLength; ++i) // Draws a thin underline to the header.
             {
-                u8x8.drawTile(i, 3, 1, tiles);
+                u8x8.drawTile(i, 2, 1, tiles);
             }
 
-            u8x8.drawString(0, 5, "TURN TO CHANGE");
-            u8x8.drawString(0, 7, "VALUES.");
+            u8x8.drawString(0, 3, "CLICK TO");
+            u8x8.drawString(0, 5, "BEGIN.");
+            u8x8.setFont(GENERAL_FONT);
         }
 
 
@@ -124,56 +121,126 @@ class RyanUsermod : public Usermod
                 int encoderB = digitalRead(CLK_PIN);
                 buttonState = digitalRead(SW_PIN);
 
-                if ((!encoderA) && encoderAPrev)
+                if (buttonState == LOW && oledTurnedOff) // Allow for button press down to wake OLED when asleep.
                 {
-                    if (encoderB == HIGH && buttonState == LOW) // Rotating clockwise while pressed
-                    {
-                        onEncoderRotatedWhilePressed(true);
-                    }
-                    else if (encoderB == HIGH) // Rotating clockwise
-                    {
-                        if (selectedStateIndex == 0) // effect
-                            onEncoderRotatedQualitative(true, true);
-                        else if (selectedStateIndex == 1) // palette
-                            onEncoderRotatedQualitative(true, false);
-                        else if (selectedStateIndex == 2) // brightness
-                            onEncoderRotatedQuantitative(true, 0);
-                        else if (selectedStateIndex == 3) // speed
-                            onEncoderRotatedQuantitative(true, 1);
-                        else if (selectedStateIndex == 4) // intensity
-                            onEncoderRotatedQuantitative(true, 2);
-                    }
-                    else if (encoderB == LOW && buttonState == LOW) // Rotating counterclockwise while pressing.
-                    {
-                        onEncoderRotatedWhilePressed(false);
-                    }
-                    else if (encoderB == LOW) // Rotating counterclockwise.
-                    {
-                        if (selectedStateIndex == 0) // effect
-                            onEncoderRotatedQualitative(false, true);
-                        else if (selectedStateIndex == 1) // palette
-                            onEncoderRotatedQualitative(false, false);
-                        else if (selectedStateIndex == 2) // brightness
-                            onEncoderRotatedQuantitative(false, 0);
-                        else if (selectedStateIndex == 3) // speed
-                            onEncoderRotatedQuantitative(false, 1);
-                        else if (selectedStateIndex == 4) // intensity
-                            onEncoderRotatedQuantitative(false, 2);
-                    }
-
-                    u8x8.clear();
-                    updateOled();
-                }
-                else if (buttonState == LOW && oledTurnedOff) // Allow for button press down to wake OLED when asleep.
-                {
+                    lastButtonPressTime = millis();
                     u8x8.setPowerSave(0);
                     oledTurnedOff = false;
                     u8x8.clear();
                     updateOled();
                     return;
                 }
+                else if (buttonState == LOW && millis() - lastButtonPressTime > BUTTON_PRESS_DEBOUNCE_MS) // Button pressed down to select an option.
+                {
+                    lastButtonPressTime = millis();
+                    optionSelected = !optionSelected;
+                    updateOled();
+                }
+                else if (!encoderA && encoderAPrev) // If knob rotated.
+                {
+                    if (oledTurnedOff) // Allow for rotation to wake OLED when asleep.
+                    {
+                        u8x8.setPowerSave(0);
+                        oledTurnedOff = false;
+                        u8x8.clear();
+                        updateOled();
+                        return;
+                    }
+
+                    bool clockwise = (encoderB == HIGH);
+
+                    if (optionSelected) 
+                    {
+                        if (optionIndex == 0) // Effect
+                        {
+                            clockwise ? ++effectIndex : --effectIndex;
+
+                            int numBanned = sizeof(bannedEffects) / sizeof(*bannedEffects);
+                            
+                            while (std::find(bannedEffects, bannedEffects + numBanned, effectIndex) != bannedEffects + numBanned)
+                                clockwise ? ++effectIndex : --effectIndex;
+
+                            if (clockwise && effectIndex >= NUM_EFFECTS)
+                                effectIndex = EFFECT_INDEX_START;
+                            else if (!clockwise && effectIndex < 0)
+                                effectIndex = NUM_EFFECTS - 1;
+
+                            effectCurrent = effectIndex;
+                            strip.restartRuntime();
+                            colorUpdated(CALL_MODE_NO_NOTIFY);
+                        }
+                        else if (optionIndex == 1) // Palette
+                        {
+                            clockwise ? ++paletteIndex : --paletteIndex;
+
+                            int numBanned = sizeof(bannedPalettes) / sizeof(*bannedPalettes);
+                            
+                            while (std::find(bannedPalettes, bannedPalettes + numBanned, paletteIndex) != bannedPalettes + numBanned)
+                                clockwise ? ++paletteIndex : --paletteIndex;
+
+                            if (clockwise && paletteIndex >= NUM_EFFECTS)
+                                paletteIndex = EFFECT_INDEX_START;
+                            else if (!clockwise && paletteIndex < 0)
+                                paletteIndex = NUM_EFFECTS - 1;
+
+                            effectPalette = paletteIndex;
+                            colorUpdated(CALL_MODE_NO_NOTIFY);
+                        }
+                        else if (optionIndex == 2) // Brightness
+                        {
+                            clockwise ? ++brightnessIndex : --brightnessIndex;
+
+                            if (brightnessIndex > 10)
+                                brightnessIndex = 10;
+                            else if (brightnessIndex < 0)
+                                brightnessIndex = 0;
+
+                            bri = quantitativeIndexToRange(brightnessIndex);
+                            stateUpdated(CALL_MODE_NO_NOTIFY);
+                        }
+                        else if (optionIndex == 3) // Speed
+                        {
+                            clockwise ? ++speedIndex : --speedIndex;
+
+                            if (speedIndex > 10)
+                                speedIndex = 10;
+                            else if (speedIndex < 0)
+                                speedIndex = 0;
+
+                            effectSpeed = quantitativeIndexToRange(speedIndex);
+                            strip.restartRuntime();
+                            colorUpdated(CALL_MODE_NO_NOTIFY);
+                        }
+                        else if (optionIndex == 4) // Intensity
+                        {
+                            clockwise ? ++intensityIndex : --intensityIndex;
+
+                            if (intensityIndex > 10)
+                                intensityIndex = 10;
+                            else if (intensityIndex < 0)
+                                intensityIndex = 0;
+
+                            effectIntensity = quantitativeIndexToRange(intensityIndex);
+                            colorUpdated(CALL_MODE_NO_NOTIFY);
+                        }
+
+                        updateInterfaces(CALL_MODE_NO_NOTIFY);
+                    }
+                    else 
+                    {
+                        (clockwise) ? ++optionIndex : --optionIndex;
+
+                        if (clockwise && optionIndex >= TOTAL_NUM_OPTIONS)
+                            optionIndex = 0;
+
+                        if (!clockwise && optionIndex < 0)
+                            optionIndex = TOTAL_NUM_OPTIONS - 1;
+                    }
+
+                    updateOled();
+                }
                 
-                if (!oledTurnedOff && millis() - lastOledUpdate > 5 * 60 * 1000)
+                if (!oledTurnedOff && millis() - lastOledUpdate > OLED_SLEEP_AFTER_MS) // Sleep OLED if inactive.
                 {
                     u8x8.setPowerSave(1);
                     oledTurnedOff = true;
@@ -186,131 +253,90 @@ class RyanUsermod : public Usermod
 
 
         /**
-         * Called when the rotary encoder is rotated on a mode 
-         * that doesn't use numbers, such as the effect and palette modes.
-         * 
-         * @param direction True if rotating clockwise, false if rotating counterclockwise.
-         * @param type True if effect, false if palette.
+         * Updates the OLED to show the updated mode or value 
+         * when the rotary encoder is turned.
          */
-        void onEncoderRotatedQualitative(bool direction, bool type)
+        void updateOled()
         {
-            if (oledTurnedOff)
+            lastOledUpdate = millis();
+            u8x8.clear();
+
+            if (effectCurrent != effectIndex) // Handle resuming after startup on mode 0 (1/2).
             {
-                u8x8.setPowerSave(0);
-                oledTurnedOff = false;
-                return;
-            }
-
-            int relevantIndex = type ? effectIndex : paletteIndex;
-            direction ? ++relevantIndex : --relevantIndex;
-
-            int numBanned = type ? (sizeof(bannedEffects) / sizeof(*bannedEffects)) : (sizeof(bannedPalettes) / sizeof(*bannedPalettes));
-
-            if (type)
-            {
-                while (std::find(bannedEffects, bannedEffects + numBanned, relevantIndex) != bannedEffects + numBanned)
-                    direction ? ++relevantIndex : --relevantIndex;
-            }
-            else
-            {
-                while (std::find(bannedPalettes, bannedPalettes + numBanned, relevantIndex) != bannedPalettes + numBanned)
-                    direction ? ++relevantIndex : --relevantIndex;
-            }
-
-            int numIndexes = type ? NUM_EFFECTS : NUM_PALETTES;
-            int startIndex = type ? EFFECT_INDEX_START : PALETTE_INDEX_START;
-
-            if (direction && relevantIndex >= numIndexes)
-                relevantIndex = startIndex;
-            else if (!direction && relevantIndex < 0)
-                relevantIndex = numIndexes - 1;
-                
-            if (type)
-            {
-                effectIndex = relevantIndex;
                 effectCurrent = effectIndex;
-                strip.restartRuntime();
-            }
-            else
-            {
-                paletteIndex = relevantIndex;
-                effectPalette = paletteIndex;
+                colorUpdated(CALL_MODE_NO_NOTIFY);
+                updateInterfaces(CALL_MODE_NO_NOTIFY);
             }
 
-            colorUpdated(CALL_MODE_NO_NOTIFY);
-            updateInterfaces(CALL_MODE_NO_NOTIFY);
-        }
-
-
-        /**
-         * Called when the rotary encoder is rotated on a mode 
-         * that uses numbers, such as the brightness and intensity modes.
-         * 
-         * @param direction True if rotating clockwise, false if rotating counterclockwise. 
-         * @param type 0 -> brightness    1 -> speed    2 -> intensity
-         */
-        void onEncoderRotatedQuantitative(bool direction, int type)
-        {
-            if (oledTurnedOff)
+            int screenIndex = 0;
+            int optionCount = 0;
+            for (int i = 0; i < NUM_SCREENS; ++i) // Calculate screenIndex from optionIndex.
             {
-                u8x8.setPowerSave(0);
-                oledTurnedOff = false;
-                return;
-            }
+                int numOptions = numOptionsPerScreen[i];
 
-            if (type == 0 || type == 1) // brightness and speed
-            {
-                int currentVal = (type == 0) ? brightnessIndex : speedIndex;
-                currentVal += direction ? 1 : -1;
-
-                if (direction && currentVal > 10)
-                    currentVal = 10;
-
-                if (!direction && currentVal < 0)
-                    currentVal = 0;
-
-                if (type == 0)
+                if (optionCount + numOptions >= optionIndex + 1)
                 {
-                    brightnessIndex = currentVal;
-                    bri = quantitativeIndexToRange(currentVal);
-                    stateUpdated(CALL_MODE_NO_NOTIFY);
+                    screenIndex = i;
+                    break;
                 }
                 else
                 {
-                    speedIndex = currentVal;
-                    effectSpeed = quantitativeIndexToRange(currentVal);
-                    colorUpdated(CALL_MODE_NO_NOTIFY);
+                    optionCount += numOptions;
                 }
-
-                updateInterfaces(CALL_MODE_NO_NOTIFY);
-            }
-            else if (type == 2) // intensity
-            {
-                // TODO: handle intensity
-            }            
-        }
-
-
-        /**
-         * @brief Called when the rotary encoder is rotated while pressed down.
-         * 
-         * @param direction True if rotating clockwise, false if rotating counterclockwise. 
-         */
-        void onEncoderRotatedWhilePressed(bool direction)
-        {
-            if (oledTurnedOff)
-            {
-                u8x8.setPowerSave(0);
-                oledTurnedOff = false;
-                return;
             }
 
-            direction ? ++selectedStateIndex : --selectedStateIndex;
+            if (screenIndex == 0) // Effect and palette screen.
+            {
+                std::string effectLabel = " EFFECT: ";
+                if (optionIndex == 0)
+                    effectLabel = ">EFFECT: ";
+                if (optionIndex == 0 && optionSelected)
+                    u8x8.setInverseFont(1);
+                u8x8.drawString(0, 0, effectLabel.c_str());
+                u8x8.setInverseFont(0);
+                u8x8.drawString(0, 2, typeConcat(" ", getCurrentEffectOrPaletteName(true).c_str()).c_str());
 
-            if (selectedStateIndex >= numStates)
-                selectedStateIndex = 0;
-            else if (selectedStateIndex < 0)
-                selectedStateIndex = NUM_STATES - 1;
+                std::string paletteLabel = " PALETTE: ";
+                if (optionIndex == 1)
+                    paletteLabel = ">PALETTE: ";
+                if (optionIndex == 1 && optionSelected)
+                    u8x8.setInverseFont(1);
+                u8x8.drawString(0, 5, paletteLabel.c_str());
+                u8x8.setInverseFont(0);
+                u8x8.drawString(0, 7, typeConcat(" ", getCurrentEffectOrPaletteName(false).c_str()).c_str());
+            }
+            else if (screenIndex == 1) // Brightness, speed, and intensity screen.
+            {
+                std::string brightnessLabel = " BRI: ";
+                if (optionIndex == 2)
+                    brightnessLabel = ">BRI: ";
+                if (optionIndex == 2 && optionSelected)
+                    u8x8.setInverseFont(1);
+                u8x8.drawString(0, 1, typeConcat(brightnessLabel.c_str(), typeConcat(brightnessIndex, "/10").c_str()).c_str());
+                u8x8.setInverseFont(0);
+
+                std::string speedLabel = " SPEED: ";
+                if (optionIndex == 3)
+                    speedLabel = ">SPEED: ";
+                if (optionIndex == 3 && optionSelected)
+                    u8x8.setInverseFont(1);
+                u8x8.drawString(0, 3, typeConcat(speedLabel.c_str(), typeConcat(speedIndex, "/10").c_str()).c_str());
+                u8x8.setInverseFont(0);
+
+                std::string intensityLabel = " INTSTY: ";
+                if (optionIndex == 4)
+                    intensityLabel = ">INTSTY: ";
+                if (optionIndex == 4 && optionSelected)
+                    u8x8.setInverseFont(1);
+                u8x8.drawString(0, 5, typeConcat(intensityLabel.c_str(), typeConcat(intensityIndex, "/10").c_str()).c_str());
+                u8x8.setInverseFont(0);
+            }
+            else if (screenIndex == 2) // Save default screen.
+            {
+                // TODO:
+
+                u8x8.drawString(0, 0, "save TODO uwu");
+            }
         }
 
 
@@ -320,7 +346,7 @@ class RyanUsermod : public Usermod
          * @param type True when effect, false when palette.
          * @return String The current effect or palette name.
          */
-        String getCurrentEffectOrPaletteName(bool type) // effect when true, palette when false.
+        std::string getCurrentEffectOrPaletteName(bool type) // effect when true, palette when false.
         {
             char lineBuffer[21];
 
@@ -329,10 +355,10 @@ class RyanUsermod : public Usermod
 
             uint8_t printedChars = extractModeName(currentEffectOrMode, relatedJSON, lineBuffer, 19);
 
-            if (lineBuffer[0]=='*' && lineBuffer[1]==' ')
+            if (lineBuffer[0] == '*' && lineBuffer[1] == ' ')
             {
-                for (byte i=2; i<=printedChars; i++)
-                    lineBuffer[i-2] = lineBuffer[i]; //include '\0'
+                for (byte i = 2; i <= printedChars; i++)
+                    lineBuffer[i - 2] = lineBuffer[i]; //include '\0'
 
                 printedChars -= 2;
             }
@@ -371,133 +397,4 @@ class RyanUsermod : public Usermod
         {
             return (index * 255) / (10) + 0;
         }
-
-
-        /**
-         * Updates the OLED to show the updated mode or value 
-         * when the rotary encoder is turned.
-         */
-        void updateOled()
-        {
-            lastOledUpdate = millis();
-
-            if (effectCurrent != effectIndex) 
-            {
-                effectCurrent = effectIndex;
-                colorUpdated(CALL_MODE_NO_NOTIFY);
-                updateInterfaces(CALL_MODE_NO_NOTIFY);
-            }
-
-            u8x8.setFont(HEADER_FONT);
-            String headerName = friendlyStateNames[selectedStateIndex];
-            u8x8.drawString(0, 0, headerName.c_str());
-
-            int headerLength = headerName.length();
-            uint8_t tiles[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
-            for (int i = 0; i < headerLength; ++i) // Draw a thin line under the header text.
-            {
-                u8x8.drawTile(i, 2, 1, tiles);
-            }
-
-            u8x8.setFont(VALUE_FONT);
-            int valueLineNum = 3;
-
-            if (selectedStateIndex == 0) // effect mode
-            {
-                // Assumes that if the name is too long that it contains a space (e.g. "Fireworks Starburst").
-                // Also assumes that the first 2 words will fit on 1 line
-                // if the effect is a 3 space-separated words.
-                String effectName = getCurrentEffectOrPaletteName(true);
-                int nameLength = effectName.length() + 1; // +1 for the ">" prefix.
-
-                if (nameLength > u8x8.getCols()) 
-                {
-                    char* cstr = const_cast<char*>(effectName.c_str());
-                    char* token = strtok(cstr, " ");
-
-                    int numTokens = 0;
-                    char* tokens[MAX_EFFECT_NAME_PARTS] = { (char*) "" };
-
-                    while (token != NULL)
-                    {
-                        tokens[numTokens] = token;
-                        ++numTokens;
-                        token = strtok(NULL, " ");
-                    }
-
-                    const char* firstTokenVal = tokens[0];
-                    tokens[0] = (char*) typeConcat(">", firstTokenVal).c_str();
-
-                    if (numTokens == 2)
-                    {
-                        u8x8.drawString(0, valueLineNum, tokens[0]);
-                        u8x8.drawString(0, valueLineNum + 2, tokens[1]);
-                    }
-                    else if (numTokens == 3)
-                    {
-                        std::string firstLine = tokens[0] + (std::string) " " + (std::string) tokens[1];
-                        u8x8.drawString(0, valueLineNum, firstLine.c_str());
-                        u8x8.drawString(0, valueLineNum + 2, tokens[2]);
-                    }
-                }
-                else
-                {
-                    u8x8.drawString(0, valueLineNum, typeConcat(">", effectName.c_str()).c_str());
-                } 
-            }
-            else if (selectedStateIndex == 1) // palette mode
-            {
-                String paletteName = getCurrentEffectOrPaletteName(false);
-                u8x8.drawString(0, valueLineNum, typeConcat(">", paletteName.c_str()).c_str());
-            }
-            else if (selectedStateIndex == 2 || selectedStateIndex == 3) // brightness and speed modes
-            {
-                int value = (selectedStateIndex == 2) ? brightnessIndex : speedIndex;
-                u8x8.drawString(0, valueLineNum, typeConcat(value, "/10").c_str());
-            }
-            else if (selectedStateIndex == 4) // intensity mode
-            {
-                // TODO: handle intensity mode.
-            }
-        }
-
-
-        // /**
-        //  * Stores last selected effect, palette, brightness, 
-        //  * speed, and intensity to config (cfg.json). Called
-        //  * before setup().
-        //  * 
-        //  * @param root The config JSON root passed as a reference.
-        //  */
-        // void addToConfig(JsonObject &root)
-        // {
-        //     JsonObject top = root.createNestedObject("ryanUsermod");
-        //     top["effectIndex"] = effectIndex;
-        //     top["paletteIndex"] = paletteIndex;
-        //     top["bri"] = bri;
-        //     top["effectSpeed"] = effectSpeed;
-        //     top["effectIntensity"] = effectIntensity;
-        // }
-
-
-        // /**
-        //  * @brief Assigns relevant variables to their stored values in the config (cfg.json).
-        //  * 
-        //  * @param root The config JSON root passed as a reference.
-        //  * @return true If the config values were complete.
-        //  * @return false If defaults should be used.
-        //  */
-        // bool readFromConfig(JsonObject &root)
-        // {
-        //     JsonObject top = root["ryanUsermod"];
-        //     bool configComplete = !top.isNull();
-
-        //     configComplete &= getJsonValue(top["effectIndex"], effectIndex);
-        //     configComplete &= getJsonValue(top["paletteIndex"], paletteIndex);
-        //     configComplete &= getJsonValue(top["bri"], bri);
-        //     configComplete &= getJsonValue(top["effectSpeed"], effectSpeed);
-        //     configComplete &= getJsonValue(top["effectIntensity"], effectIntensity);
-
-        //     return configComplete;
-        // }
 };
